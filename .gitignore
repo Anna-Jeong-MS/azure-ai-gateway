@@ -19,6 +19,7 @@
 # Existing local document generators and sources
 /generate-setup-guide*.ps1
 /setup-guide-slides.md
+/requirement.md
 
 # Local document artifacts
 *.pptx

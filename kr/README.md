@@ -38,6 +38,15 @@ Azure API Management와 Azure OpenAI를 사용해 텍스트·이미지 모델 �
 APIM -- 공용 HTTPS + Entra 토큰 --> 각 Azure OpenAI 계정
 ```
 
+## 두 API의 공통 인증 기준
+
+| 구간 | 인증 방식 | 전달 주체 |
+| --- | --- | --- |
+| 클라이언트 → APIM | **APIM 구독 키**, 헤더 `Ocp-Apim-Subscription-Key` | 클라이언트가 Text API 또는 Image API 범위의 키 전달 |
+| APIM → 모델 | **Managed Identity**, `authentication-managed-identity` 정책 | APIM이 Entra 접근 토큰을 얻어 모델 호출용 Authorization 헤더 설정 |
+
+텍스트 Language Model API와 이미지 일반 HTTP API 모두 같은 기준입니다. 클라이언트는 Azure OpenAI 계정 키나 관리 ID 토큰을 APIM에 보내지 않습니다. APIM 구독 키는 모델 계정 키가 아닙니다. APIM이 클라이언트 키를 검증하고 전달 전에 제거한 뒤 자체 시스템 할당 ID로 모델을 호출합니다.
+
 ## 범위와 원본 대응
 
 로컬 원본 PDF의 관리 ID·토큰 제한·백엔드 풀 예시를 바탕으로, 로컬 요구사항의 **텍스트 모델 2개 + 이미지 모델 2개** 구성을 실제 작업 순서로 정리했습니다. 고객사명·계정명·리소스 식별자는 새 가이드에 옮기지 않았습니다.
@@ -69,6 +78,7 @@ PDF는 기능 소개 자료이므로 무료 호출량·가격·GA/Preview·지�
 - `<...>`는 사용자가 채울 값입니다. 실제 고객 환경 값과 비밀은 로컬 기록에만 보관합니다.
 - 리소스 설정과 테스트는 정책 편집기·API 테스트 콘솔을 포함해 **Azure Portal에서만** 진행합니다. CLI·PowerShell·Cloud Shell 실행 단계는 없습니다.
 - 공용 연결이 익명 접근을 의미하지는 않습니다. APIM 구독 검증과 모델 계정의 관리 ID·RBAC 인증은 유지합니다.
+- 모델 인증은 각 API의 **inbound 정책**에 `authentication-managed-identity`로 설정합니다. 백엔드의 **Authorization credentials → Managed identity** 탭은 필수 조건이 아니며 4단계에 두 API의 전체 정책이 있습니다.
 - 기존 로컬 PDF·요구사항·이미지·배포 코드·정책은 유지하고 `.gitignore`로 GitHub 업로드에서 제외합니다. 새 문서는 기존 스크립트나 정책 파일을 덮어쓰지 않습니다.
 - 문서 작성 중 Azure 생성·변경·추론 호출은 실행하지 않았습니다. 실제 동작은 05단계에서 검증해야 하며 수행 시 Azure 비용이 발생합니다.
 

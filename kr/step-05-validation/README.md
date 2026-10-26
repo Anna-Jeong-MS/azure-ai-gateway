@@ -20,7 +20,7 @@
 1. APIM **APIs → APIs → Text API → Test**를 엽니다.
 2. 텍스트 Language Model API가 **자동 생성한 POST `/chat/completions` 작업**을 선택합니다. 표시 이름은 다를 수 있습니다.
 3. `api-version`에 1단계에서 성공한 텍스트 버전을 넣습니다.
-4. `Content-Type: application/json`과 Text API에 접근 가능한 APIM 구독 키를 확인합니다.
+4. `Content-Type: application/json`과 **`Ocp-Apim-Subscription-Key: <text-api-subscription-key>`**를 확인합니다. 포털 테스트 콘솔의 기본 all-access 키 대신 Text API 범위 테스트 키를 선택하거나 덮어씁니다. Azure OpenAI `api-key`나 클라이언트 Authorization 토큰은 보내지 않습니다.
 5. 4단계의 JSON 본문을 넣습니다.
 6. **Trace**를 선택하고 응답의 **Trace → Inbound / Backend / Outbound / On error**를 확인합니다.
 7. 최종 백엔드 URL에 `/openai/deployments/gpt-55/chat/completions`가 한 번만 있는지 확인합니다.
@@ -29,11 +29,13 @@
 #### 이미지
 
 1. Image API의 **Generate image** 작업에서 같은 절차를 반복합니다.
-2. 이미지용 API 버전·구독 키·JSON 본문을 사용합니다.
+2. 이미지용 API 버전·**`Ocp-Apim-Subscription-Key: <image-api-subscription-key>`**·JSON 본문을 사용합니다. 모델 계정 키나 클라이언트 Authorization 토큰이 아닌 Image API 범위 테스트 키를 사용합니다.
 3. 최종 경로가 `/openai/deployments/gpt-image-25-flare/images/generations`인지 확인합니다.
 4. HTTP 200과 `data` 배열의 실제 이미지 데이터 등 해당 모델의 응답 구조를 확인합니다. 선택한 모델에 따라 base64 등 출력 형식이 다를 수 있습니다.
 
 Trace와 응답에는 토큰·프롬프트·이미지·개인정보가 포함될 수 있습니다. 로그나 캡처를 GitHub에 올리지 않고 외부 공유 전 비식별 처리합니다. 현재 추적에는 기존 `Ocp-Apim-Trace` 헤더를 사용하지 않습니다.
+
+두 API 모두 inbound 관리 ID 정책이 실행되고 클라이언트가 모델 자격을 보내지 않아도 호출되는지 확인합니다. APIM 구독 키는 모델에 전달하지 않으며 모델 호출용 Authorization은 APIM이 생성합니다. 정책 실행·상태만 확인하고 토큰 값은 노출하지 않습니다.
 
 ### 5-A-2. 포털 테스트 결과 기록
 
@@ -106,7 +108,7 @@ API의 **Test**와 응답 **Trace** 탭만 사용합니다. 로컬 클라이언�
 
 1. 운영 모델 쿼터 소진 대신, 조직이 소유·통제하는 테스트용 HTTPS 엔드포인트 두 개를 준비합니다. 공개 테스트 서비스에 토큰·구독 키를 보내지 않습니다.
 2. Primary 테스트 엔드포인트는 제어 가능한 429와 `Retry-After: 60`, Secondary는 식별 가능한 정상 응답을 반환하도록 구성합니다.
-3. 별도 테스트 백엔드 두 개와 테스트 풀·API를 만들고 같은 우선순위/차단 조건을 적용합니다. 테스트 백엔드에는 관리 ID 자격을 설정하지 않고, 테스트 API는 클라이언트 Authorization·api-key·APIM 키를 업스트림 전송 전에 제거합니다.
+3. 별도 테스트 백엔드 두 개와 테스트 풀·API에 같은 우선순위/차단 조건을 적용합니다. 모델 인증 정책이나 관리 ID 자격은 이 테스트 리소스에 붙이지 않습니다. 상위 정책도 확인하고 클라이언트 Authorization·api-key·APIM 키를 전송 전에 제거하여 모델 토큰이 테스트 엔드포인트로 가지 않게 합니다.
 4. Primary가 정상일 때 Primary 선택을 확인합니다.
 5. Primary를 429 상태로 바꾸고 Trace에서 오류가 **백엔드에서 발생했는지** 확인합니다.
 6. 회로가 열린 뒤 후속 요청이 Secondary로 가는지 Trace와 테스트 엔드포인트 로그로 확인합니다. 노드별 근사 동작이므로 최초 한 요청의 결과만으로 판정하지 않습니다.
@@ -130,7 +132,7 @@ API의 **Test**와 응답 **Trace** 탭만 사용합니다. 로컬 클라이언�
 | 현상 | 먼저 확인할 항목 |
 | --- | --- |
 | APIM 401 | 구독 키, Active 상태, API 범위, Subscription required |
-| 모델 401 | 관리 ID 자격 설정, audience, 토큰 헤더의 뒤늦은 삭제·덮어쓰기 |
+| 모델 401 | inbound authentication-managed-identity 정책, APIM ID·역할, audience, 토큰 헤더의 뒤늦은 삭제·덮어쓰기 |
 | 403 | 오류 발생 위치, AI 계정 RBAC, 네트워크 제한, 선택적 token quota |
 | 404 | APIM 작업 매칭 여부 → 최종 백엔드 호스트/배포 이름/중복 경로/API 버전 |
 | 429 | APIM 제한인지 모델 쿼터인지 Trace로 구분, Retry-After와 실제 쿼터 풀 확인 |
@@ -144,7 +146,7 @@ API의 **Test**와 응답 **Trace** 탭만 사용합니다. 로컬 클라이언�
 - [ ] 모델·버전·배포 유형·쿼터 범위를 실제 구독에서 확인했다.
 - [ ] **Standard v2**, 공용 네트워크 접근 활성화, 이번 실습의 VNet Injection·Integration·Private Endpoint 미설정을 확인했다.
 - [ ] 시스템 할당 관리 ID와 계정 네 개의 OpenAI User 역할이 확인된다.
-- [ ] 자동 생성 Text Primary를 재사용하고 자동 1개 + 수동 3개인 단일 백엔드 네 개에 관리 ID 인증·회로 차단 규칙을 저장했다.
+- [ ] 자동 생성 Text Primary를 재사용하고 자동 1개 + 수동 3개의 단일 백엔드 URL·회로 차단을 저장했으며 Text API·Image API의 API 수준 인증을 확인했다.
 - [ ] 두 풀의 구성원·우선순위·가중치를 확인했다.
 - [ ] APIM 생성 직후 2단계에서 텍스트 Language Model API·이미지 일반 HTTP API를 만들었고 자동/수동 작업과 범위별 구독을 확인했다.
 - [ ] 모든 개별 백엔드 정상 호출과 풀을 통한 최종 호출을 확인했다.

@@ -40,6 +40,15 @@ Client -- public HTTPS + APIM subscription key --> APIM Standard v2 (system-assi
 APIM -- public HTTPS + Microsoft Entra token --> each Azure OpenAI account
 ```
 
+## Authentication contract for both APIs
+
+| Connection | Authentication | Who supplies it |
+| --- | --- | --- |
+| Client to APIM | **APIM subscription key** in `Ocp-Apim-Subscription-Key` | Client sends the key scoped to Text API or Image API |
+| APIM to model | **Managed Identity** through `authentication-managed-identity` | APIM obtains the Entra access token and sets the model-facing Authorization header |
+
+This applies equally to the text Language Model API and the image regular HTTP API. Clients do **not** send Azure OpenAI account keys or managed identity tokens to APIM. An APIM subscription key is not a model account key. APIM validates the client key, removes it before forwarding, and authenticates the model request with its own system-assigned identity.
+
 ## Scope and source mapping
 
 The guide turns the local requirements into an implementation sequence for **two text-model accounts and two image-model accounts**, using the local source PDF's identity, token-limit, and backend-pool examples. Customer names, account names, and resource identifiers have not been copied into these guides.
@@ -71,6 +80,7 @@ The PDF is a feature overview, not a current pricing or availability contract. D
 - Replace `<...>` placeholders with your values. Keep customer-specific values and secrets in local records only.
 - All resource configuration and testing use the **Azure portal only**, including its policy editor and API test console. No CLI, PowerShell, or Cloud Shell steps are required.
 - Public connectivity does not mean anonymous access: keep APIM subscription validation and managed identity/RBAC authentication to model accounts enabled.
+- Model authentication is configured in each API's **inbound policy** with `authentication-managed-identity`. The backend **Authorization credentials > Managed identity** tab is not a prerequisite; step 04 includes complete policies for both APIs.
 - Existing local PDFs, requirements, images, deployment code, and policy files remain local and are excluded through `.gitignore`. These guides do not overwrite those files.
 - No Azure resource changes or inference calls were performed while writing the guide. Actual behavior must be verified in step 05. Following the procedures can incur Azure charges.
 

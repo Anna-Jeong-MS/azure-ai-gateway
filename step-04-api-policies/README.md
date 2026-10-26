@@ -96,6 +96,30 @@ An **APIM subscription is not an Azure subscription**. A product-scoped subscrip
 
 For per-team token-limit testing, step 05 creates another Text API subscription. Sharing one key across teams does not create separate team limits.
 
+#### Client request headers
+
+For both APIs, the client sends **only the APIM subscription key as its authentication credential**. Do not send a model account `api-key` or a managed identity Authorization token. The examples show HTTP headers, not command-line instructions; supply the JSON request body shown above in the portal's **Test** tab.
+
+Text:
+
+```http
+POST /text/chat/completions?api-version=<text-version> HTTP/1.1
+Host: <apim-name>.azure-api.net
+Ocp-Apim-Subscription-Key: <text-api-subscription-key>
+Content-Type: application/json
+```
+
+Images:
+
+```http
+POST /image/deployments/gpt-image-25-flare/images/generations?api-version=<image-version> HTTP/1.1
+Host: <apim-name>.azure-api.net
+Ocp-Apim-Subscription-Key: <image-api-subscription-key>
+Content-Type: application/json
+```
+
+APIM validates the subscription before processing the inbound policy. Therefore the policies below can remove `Ocp-Apim-Subscription-Key` before model forwarding without removing client authentication. APIM then adds its **own managed identity token** for the model request. Keep **Subscription required = On** on both APIs.
+
 ### Reference: switching the text API to v1
 
 The default walkthrough uses date-based APIs. If selecting v1, change every text integration surface together and validate separately.
@@ -137,7 +161,7 @@ Calling now can still use the default primary URL. **Pool routing is complete on
 
 Route each API to its pool, then add optional features incrementally after basic calls work. Use the examples here without changing the existing local policy files at the root.
 
-**Default authentication is configured on each individual backend in step 03.** API **Subscription required** must be On.
+**Default authentication is the `authentication-managed-identity` policy in each API's inbound section.** No backend Managed identity tab is required. APIM's system-assigned identity and roles from step 03 must be ready, and API **Subscription required** must be On.
 
 ### 4-B-1. Check policy scope and existing behavior
 
@@ -148,7 +172,7 @@ Route each API to its pool, then add optional features incrementally after basic
 5. Inspect **Calculate effective policy**. Assess and resolve any operation-level routing or authentication overrides.
 6. Apply the separate image baseline to Image API.
 
-The baseline below uses managed identity credentials on both text single backends, including the generated one, as completed in step 03. If the wizard also emitted API-level authentication, reconcile it with this choice rather than issuing tokens twice or deleting a policy-issued token without backend credentials ready. Preserve imported operation definitions and request schemas; replace the generated single-backend route, not the API itself.
+The complete baselines below obtain the model-access token at API scope. If the text wizard already emitted an authentication policy, reconcile it with this baseline so authentication is applied once in the effective inbound flow. Inspect existing backend credentials for overrides instead of combining competing authentication methods. Preserve imported operations and schemas; replace the generated single-backend route, not the API itself.
 
 `<base />` inherits parent policies. These examples define `forward-request` directly in `<backend>`, so do not add `<base />` alongside it. If global backend policies contain mandatory processing, assess the effect of overriding them and preserve required behavior.
 
@@ -162,6 +186,9 @@ The baseline below uses managed identity credentials on both text single backend
     <set-header name="Authorization" exists-action="delete" />
     <set-header name="Ocp-Apim-Subscription-Key" exists-action="delete" />
     <set-query-parameter name="subscription-key" exists-action="delete" />
+    <authentication-managed-identity
+      resource="https://cognitiveservices.azure.com"
+      ignore-error="false" />
     <set-backend-service backend-id="text-pool" />
   </inbound>
   <backend>
@@ -179,7 +206,8 @@ The baseline below uses managed identity credentials on both text single backend
 </policies>
 ```
 
-- Delete the **client's Authorization header** so it is not forwarded as the model credential. The selected single backend's managed identity credentials must supply the model-facing Authorization header.
+- Delete the **client's Authorization header**, then let `authentication-managed-identity` set the model-facing Bearer header. Do not delete or overwrite Authorization after that policy.
+- With no `client-id`, the policy uses APIM's system-assigned identity. With no `output-token-variable-name`, it sets Authorization directly; a separate `set-header` is not required.
 - After APIM validates the subscription, the key does not need to reach the model account. Removing the header does not remove the already-resolved `context.Subscription`.
 - `buffer-response="false"` avoids unnecessary buffering if SSE is enabled later. Initially test with `stream: false`.
 - The 120-second value is an example response-header wait time, not a guarantee of end-to-end success.
@@ -195,6 +223,9 @@ The baseline below uses managed identity credentials on both text single backend
     <set-header name="Authorization" exists-action="delete" />
     <set-header name="Ocp-Apim-Subscription-Key" exists-action="delete" />
     <set-query-parameter name="subscription-key" exists-action="delete" />
+    <authentication-managed-identity
+      resource="https://cognitiveservices.azure.com"
+      ignore-error="false" />
     <set-backend-service backend-id="image-pool" />
   </inbound>
   <backend>
@@ -288,13 +319,14 @@ Replace **only the text API's `<backend>` block** with:
 - Do not expect transparent retries after a streaming response has started reaching the client.
 - Do not apply this block to image generation.
 
-### Alternative: authenticate at API policy scope
+### Verify the API-policy authentication
 
-Use this only if **explicitly choosing policy authentication instead of backend credentials**.
+This is the **default**, already included in both complete policies above. Do not add a second copy.
 
-1. Disable managed identity credentials on both individual backends used by that API.
-2. Insert the following **after** deleting Authorization and **before** `set-backend-service` in the API's inbound policy.
-3. Account role assignments remain necessary. Verify Bearer-token forwarding in Trace without copying or logging the token itself.
+1. Open **APIs > APIs > Text API > Design > All operations > `</>`** and locate the policy below in `<inbound>`.
+2. Confirm it appears **after** deleting the client Authorization header and **before** `set-backend-service`.
+3. Repeat for **Image API**. Check the effective policy for generated/operation-level duplicates or later Authorization overrides.
+4. Keep account role assignments from step 03. Inspect the authentication stage and status in Trace without copying or logging tokens. No backend authentication menu is needed.
 
 ```xml
 <authentication-managed-identity
@@ -304,7 +336,7 @@ Use this only if **explicitly choosing policy authentication instead of backend 
 
 Without `output-token-variable-name`, this policy sets Authorization. Deleting that header afterward removes the authentication.
 
-**Choose one authentication location.** Do not change `ignore-error` to `true` to hide failures or hardcode a model key.
+If an existing deployment intentionally uses backend-managed authentication, assess it before migrating; do not configure both approaches blindly. Do not change `ignore-error` to `true` to hide failures or hardcode a model key.
 
 ### Completion criteria
 

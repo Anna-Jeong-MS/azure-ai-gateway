@@ -8,7 +8,7 @@ English | [Korean](../kr/step-02-create-apis/README.md)
 
 ### Prerequisites and fixed choices
 
-Step 01 has prepared **Standard v2 APIM with public access** and recorded the already-deployed models. Create the APIs now; configure or verify identity, roles, and backend credentials in step 03. Do not test an unauthenticated backend yet.
+Step 01 has prepared **Standard v2 APIM with public access** and recorded the already-deployed models. Create the APIs now; configure identity and roles in step 03 and API-policy authentication in step 04. Do not test an unauthenticated backend yet.
 
 | API | Portal creation tile | Backend handling |
 | --- | --- | --- |
@@ -35,7 +35,7 @@ Use actual existing deployment names instead of the examples `gpt-55` and `gpt-i
 
 The URL is the existing Text A deployment base. Do not append `/chat/completions` or `?api-version=...` here. The generated operation supplies `/chat/completions`.
 
-5. If the wizard offers managed identity and APIM already has it enabled, select the system-assigned identity. Otherwise leave static key authentication unset and complete managed identity configuration in step 03 before testing.
+5. Do not enter a static model key. If the wizard offers managed identity and it is already enabled, record any generated authentication settings. Otherwise leave static authentication unset. Complete identity/roles in step 03 and use the full API-policy authentication in step 04 before testing; a backend Managed identity tab is not required.
 6. Select **Next** and review **Manage token consumption**, **Apply semantic caching**, and **AI content safety**. Leave optional features off for baseline testing; do not enable features needing unprepared resources.
 7. Select **Review > Create**.
 

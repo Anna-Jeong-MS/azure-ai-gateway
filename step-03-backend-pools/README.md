@@ -25,10 +25,12 @@ If user-assigned identities are already attached, preserve them. Enable the syst
 
 ### 3-A-2. Understand the authentication boundaries
 
-| Connection | Credential |
-| --- | --- |
-| Client to APIM | APIM subscription key created in step 04 |
-| APIM to Azure OpenAI | Entra token obtained with the APIM managed identity |
+| Connection | Credential | Configuration |
+| --- | --- | --- |
+| Client to APIM | **APIM subscription key** in `Ocp-Apim-Subscription-Key` | Step 04 creates an Active API-scoped subscription; the client supplies its key |
+| APIM to Azure OpenAI | **Managed Identity**; APIM obtains the Entra token itself | APIM system-assigned identity, account roles, and API inbound authentication policy |
+
+The same boundary applies to Text API and Image API. Clients do not need a model account key or their own managed identity token for these APIM calls. Do not use an APIM subscription key as the model's `api-key`.
 
 Enabling the identity does not grant access to model accounts. Assign a role on **each AI account** next. Obtaining a token does not bypass network restrictions.
 
@@ -133,21 +135,21 @@ Replace the account placeholders with the actual names recorded in step 01.
 | `image-aoai-01` | `https://<image-account-a>.openai.azure.com/openai` | `gpt-image-25-flare` |
 | `image-aoai-02` | `https://<image-account-b>.openai.azure.com/openai` | `gpt-image-25-flare` |
 
-**Text:** Both text backend bases include `/openai/deployments/<actual-text-deployment>` and use the imported `/chat/completions` operation. **Images:** Both image bases end at `/openai`; the manually created image operation in step 04 contains `/deployments/<actual-image-deployment>/images/generations`. Do not mix these two layouts or put `api-version` in a backend base URL.
+**Text:** Both text backend bases include `/openai/deployments/<actual-text-deployment>` and use the imported `/chat/completions` operation. **Images:** Both image bases end at `/openai`; the regular HTTP API operation created in step 02 contains `/deployments/<actual-image-deployment>/images/generations`. Do not mix these two layouts or put `api-version` in a backend base URL.
 
 ### 3-C-2. Reuse one generated backend and create three manually
 
 1. Open **APIs > Backends** and select the generated Text Primary backend. Reuse its actual ID; inspect its deployment-specific URL instead of creating a duplicate.
 2. For the remaining backends only, select **+ Create new backend** and create `text-aoai-02`, `image-aoai-01`, and `image-aoai-02` using the table. If any already exists, inspect and reuse it.
 3. Choose a single backend and the HTTP protocol option for manual backends, but enter an **HTTPS runtime URL**.
-4. Apply the following authentication checks to all four backends, including the automatic one.
-5. Under **Authorization credentials > Managed identity**, select **Enable**.
-6. Set **Client identity > System assigned identity**.
-7. Set **Resource ID** to exactly **`https://cognitiveservices.azure.com`**. This is the token audience, not the AI account's resource ID or backend URL.
-8. Remove conflicting static `api-key` or stale Authorization credentials from this backend after assessing any APIs that reuse it.
-9. Save and verify all four single backends: **one automatic + three manual**, not five. The image regular HTTP API was already created in step 02; do not use Language Model API for images.
+4. Save each backend's name, HTTPS URL, and circuit-breaker configuration. **Do not look for a required Managed identity tab on the backend.**
+5. Inspect any existing static `api-key` or Authorization credentials, including on the generated backend. Resolve conflicts with the API-policy authentication below after assessing other APIs that reuse the backend; do not delete shared credentials blindly.
+6. Verify all four single backends: **one automatic + three manual**, not five. The image regular HTTP API was already created in step 02; do not use Language Model API for images.
+7. Continue with the pools below, then apply **API-level managed identity authentication in step 04, section 4-B** before testing.
 
-The default authentication location is **the managed identity credentials on each individual backend**. Do not configure account authentication on the pool itself. Step 04 does not need to request the same token again in the API policy.
+**Where was the documented menu?** The backend documentation describes **APIM > APIs > Backends > a single backend > Authorization credentials > Managed identity**. It is not the APIM resource's Managed identities page or a pool's settings. If it is absent in your portal, do not treat finding it as a prerequisite or assume a particular reason for the UI difference.
+
+**This guide uses API-policy authentication for both text and images.** The policy editor is at **APIs > APIs > the API > Design > All operations > `</>`**. Section 4-B provides complete policies using `authentication-managed-identity` with resource `https://cognitiveservices.azure.com`. The system-assigned identity and account-scoped roles from sections 3-A/3-B are still required.
 
 ### 3-C-3. Add a circuit breaker
 
@@ -181,14 +183,14 @@ These are **exercise starting values for observing failover**, not fixed Microso
 
 - [ ] Confirm all four backend IDs match the intended account URLs.
 - [ ] Text API was imported with Language Model API; its generated backend is reused as Primary, with only three additional single backends.
-- [ ] Verify system-assigned identity credentials and the correct audience on each.
+- [ ] Verify APIM's system-assigned identity and account roles; apply the API-level authentication policies in step 04 before calls.
 - [ ] Save a 429-handling circuit-breaker rule accepting Retry-After on each backend.
 - [ ] Record whether 5xx was included and the actual settings used.
 - [ ] Verify deployment paths are not duplicated.
 
 ### Troubleshooting
 
-- **Managed identity option missing:** Check identity enablement and portal/tier support. Step 04 includes an API-level alternative; do not mix the two approaches.
+- **Backend Managed identity tab missing:** Continue without it. Use step 04's API-policy authentication; no backend identity menu is required. Do not confuse the missing tab with disabling APIM's system-assigned identity.
 - **BackendConnectionFailure:** Check DNS, firewalls, TLS, and actual account hostnames.
 - **Failover persists too long:** Inspect the actual Retry-After value and trip duration.
 
@@ -205,7 +207,7 @@ These are **exercise starting values for observing failover**, not fixed Microso
 
 ### Objective and prerequisites
 
-Group the four single backends into `text-pool` and `image-pool`. Save backend authentication and circuit-breaker settings first.
+Group the four single backends into `text-pool` and `image-pool`. Save their URLs and circuit-breaker settings first; API-policy authentication is added in step 04.
 
 ### 3-D-1. Choose the distribution strategy
 

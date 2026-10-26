@@ -97,6 +97,30 @@ https://<apim>.azure-api.net/image/deployments/gpt-image-25-flare/images/generat
 
 팀별 토큰 분리를 검증할 때는 5단계에서 Text API 구독을 하나 더 만듭니다. 공유된 키 하나를 여러 팀이 사용하면 팀별 제한이 분리되지 않습니다.
 
+#### 클라이언트 요청 헤더
+
+두 API 모두 클라이언트가 인증 자격으로 전달하는 것은 **APIM 구독 키뿐**입니다. 모델 계정의 `api-key`나 관리 ID Authorization 토큰을 보내지 않습니다. 아래는 명령줄 실행 예제가 아닌 HTTP 헤더 예시이며 포털 **Test** 탭에서 위 JSON 요청 본문과 함께 사용합니다.
+
+텍스트:
+
+```http
+POST /text/chat/completions?api-version=<text-version> HTTP/1.1
+Host: <apim-name>.azure-api.net
+Ocp-Apim-Subscription-Key: <text-api-subscription-key>
+Content-Type: application/json
+```
+
+이미지:
+
+```http
+POST /image/deployments/gpt-image-25-flare/images/generations?api-version=<image-version> HTTP/1.1
+Host: <apim-name>.azure-api.net
+Ocp-Apim-Subscription-Key: <image-api-subscription-key>
+Content-Type: application/json
+```
+
+APIM은 inbound 정책 처리 전에 구독을 검증합니다. 따라서 아래 정책에서 모델 전달 전에 `Ocp-Apim-Subscription-Key`를 제거해도 클라이언트 인증을 생략하는 것이 아닙니다. 이후 모델 요청에는 **APIM 자체 관리 ID 토큰**이 설정됩니다. 두 API 모두 **Subscription required = On**을 유지합니다.
+
 ### 참고: 텍스트 v1 API로 변경하는 경우
 
 기본 절차는 날짜형 API입니다. 실제 배포에서 v1을 선택했다면 텍스트의 모든 연결 지점을 함께 변경하고 별도로 검증합니다.
@@ -139,7 +163,7 @@ https://<apim>.azure-api.net/image/deployments/gpt-image-25-flare/images/generat
 
 API를 올바른 풀로 보내고, 기본 호출 성공 후 선택 기능을 단계적으로 추가합니다. 이 문서의 XML을 사용하며 루트의 기존 로컬 정책 파일은 수정하지 않습니다.
 
-**기본 인증은 3단계의 개별 백엔드 Managed identity 설정입니다.** API Subscription required는 On이어야 합니다.
+**기본 인증은 각 API inbound의 `authentication-managed-identity` 정책입니다.** 백엔드의 Managed identity 탭은 필요하지 않습니다. 3단계의 APIM 시스템 할당 ID와 역할을 준비하고 API Subscription required는 On으로 유지합니다.
 
 ### 4-B-1. 적용 위치와 기존 정책 확인
 
@@ -150,7 +174,7 @@ API를 올바른 풀로 보내고, 기본 호출 성공 후 선택 기능을 단
 5. **Calculate effective policy**로 유효 정책을 확인합니다. 라우팅이나 인증을 덮어쓰는 작업별 정책이 있으면 영향도를 확인한 뒤 정리합니다.
 6. Image API에도 별도의 기본 정책을 적용합니다.
 
-아래 기본 정책은 3단계에서 자동 생성 백엔드까지 포함한 두 텍스트 단일 백엔드에 관리 ID 자격을 설정한 상태를 전제로 합니다. 마법사가 API 수준 인증 정책도 만들었다면 인증 위치를 이 기준에 맞춰 정리하며 토큰을 중복 발급하거나 백엔드 자격 준비 없이 정책 발급 토큰을 삭제하지 않습니다. 가져온 작업 정의와 요청 스키마는 유지하고 API 자체가 아닌 자동 생성 단일 백엔드 경로를 교체합니다.
+아래 전체 정책은 API 수준에서 모델 접근 토큰을 얻습니다. 텍스트 마법사가 인증 정책을 이미 만들었다면 유효 inbound에서 인증이 한 번 적용되도록 이 기준과 정리합니다. 기존 백엔드 자격이 토큰을 덮어쓰는지도 확인하며 경쟁하는 인증 방식을 섞지 않습니다. 가져온 작업·스키마를 유지하고 API 자체가 아닌 자동 생성 단일 백엔드 경로를 교체합니다.
 
 `<base />`는 상위 정책 상속을 의미합니다. 아래 예시의 `<backend>`에는 직접 `forward-request`를 정의하므로 `<base />`를 함께 추가하지 않습니다. 전역 backend 정책에 필수 처리가 있다면 이를 생략하는 영향도를 검토하고 보존해야 합니다.
 
@@ -164,6 +188,9 @@ API를 올바른 풀로 보내고, 기본 호출 성공 후 선택 기능을 단
     <set-header name="Authorization" exists-action="delete" />
     <set-header name="Ocp-Apim-Subscription-Key" exists-action="delete" />
     <set-query-parameter name="subscription-key" exists-action="delete" />
+    <authentication-managed-identity
+      resource="https://cognitiveservices.azure.com"
+      ignore-error="false" />
     <set-backend-service backend-id="text-pool" />
   </inbound>
   <backend>
@@ -181,7 +208,8 @@ API를 올바른 풀로 보내고, 기본 호출 성공 후 선택 기능을 단
 </policies>
 ```
 
-- `Authorization` 삭제는 **클라이언트가 보낸 토큰을 모델 계정으로 그대로 전달하지 않기 위한 것**입니다. 선택된 단일 백엔드의 Managed identity 자격이 모델 호출용 Authorization을 생성해야 합니다.
+- **클라이언트의 Authorization을 먼저 삭제**한 뒤 `authentication-managed-identity`가 모델 호출용 인증 헤더를 설정합니다. 이 정책 뒤에서 Authorization을 다시 삭제하거나 덮어쓰지 않습니다.
+- `client-id`를 생략하면 APIM 시스템 할당 ID를 사용합니다. `output-token-variable-name`도 생략했으므로 Authorization이 직접 설정되며 별도의 `set-header`가 필요하지 않습니다.
 - APIM 구독 검증 후에는 구독 키를 모델 계정에 전달할 필요가 없습니다. 삭제하더라도 이미 확인된 `context.Subscription`은 정책에서 사용할 수 있습니다.
 - `buffer-response="false"`는 추후 SSE 응답이 지연되지 않도록 지정한 값입니다. 초기 검증은 `stream: false`로 수행합니다.
 - 120초는 예시 응답 헤더 대기 시간이며 요청 전체의 성공을 보장하지 않습니다.
@@ -197,6 +225,9 @@ API를 올바른 풀로 보내고, 기본 호출 성공 후 선택 기능을 단
     <set-header name="Authorization" exists-action="delete" />
     <set-header name="Ocp-Apim-Subscription-Key" exists-action="delete" />
     <set-query-parameter name="subscription-key" exists-action="delete" />
+    <authentication-managed-identity
+      resource="https://cognitiveservices.azure.com"
+      ignore-error="false" />
     <set-backend-service backend-id="image-pool" />
   </inbound>
   <backend>
@@ -289,12 +320,12 @@ Text API의 **`<backend>` 전체만** 다음 블록으로 교체합니다. Image
 - 5xx·네트워크 타임아웃은 자동 재시도하지 않습니다. 생성 완료 여부가 불명확한 경우를 운영 정책으로 따로 처리합니다.
 - 스트리밍 응답이 클라이언트로 시작된 이후에는 투명한 재시도를 기대하지 않습니다.
 
-### 대안. API 정책에서 관리 ID 인증하는 방식
+### API 정책 인증 확인
 
-백엔드 자격 대신 정책 인증을 사용하기로 **명시적으로 선택한 경우만** 적용합니다.
+이 방식이 **기본**이며 위 두 전체 정책에 이미 포함되어 있습니다. 두 번째 사본을 추가하지 않습니다.
 
-1. 해당 API의 두 단일 백엔드에서 Managed identity 자격을 비활성화합니다.
-2. 기본 정책의 `Authorization` 삭제 **다음**, `set-backend-service` **이전**에 다음을 넣습니다.
+1. **APIs → APIs → Text API → Design → All operations → `</>`**에서 `<inbound>`의 아래 정책을 찾습니다. **Image API**에서도 반복하며 백엔드 인증 메뉴는 필요하지 않습니다.
+2. 클라이언트 Authorization 삭제 **다음**, `set-backend-service` **이전**에 있는지 확인합니다. 유효 정책에 자동 생성·작업별 중복 인증이나 뒤늦은 Authorization 덮어쓰기가 없는지 확인합니다.
 3. 관리 ID 역할은 그대로 필요합니다. 최종 Trace에서 모델 계정으로 Bearer 토큰이 전달되는지만 확인하고 토큰 자체는 복사·기록하지 않습니다.
 
 ```xml
@@ -305,7 +336,7 @@ Text API의 **`<backend>` 전체만** 다음 블록으로 교체합니다. Image
 
 `output-token-variable-name`을 지정하지 않으면 이 정책이 Authorization 헤더를 설정합니다. 뒤에서 Authorization을 다시 삭제하면 인증이 사라집니다.
 
-**두 방식 중 하나만 선택합니다.** 실패를 감추려고 `ignore-error="true"`로 바꾸거나 정적 모델 키를 하드코딩하지 않습니다.
+기존 환경이 의도적으로 백엔드 인증을 사용한다면 전환 영향을 먼저 확인하고 두 방식을 무작정 함께 설정하지 않습니다. 실패를 감추려고 `ignore-error="true"`로 바꾸거나 정적 모델 키를 하드코딩하지 않습니다.
 
 ### 완료 기준
 

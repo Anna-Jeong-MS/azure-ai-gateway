@@ -26,10 +26,12 @@ APIM이 모델 키 대신 Microsoft Entra 토큰으로 각 AI 계정을 호출�
 
 ### 3-A-2. 인증 경계 이해
 
-| 구간 | 사용하는 자격 |
-| --- | --- |
-| 클라이언트 → APIM | 4단계에서 발급할 APIM 구독 키 |
-| APIM → Azure OpenAI | 지금 활성화한 APIM 관리 ID의 Entra 토큰 |
+| 구간 | 사용하는 자격 | 설정 위치 |
+| --- | --- | --- |
+| 클라이언트 → APIM | **APIM 구독 키**, 헤더 `Ocp-Apim-Subscription-Key` | 4단계에서 API 범위의 Active 구독 생성, 클라이언트가 해당 키 전달 |
+| APIM → Azure OpenAI | **Managed Identity**, APIM이 Entra 토큰을 직접 획득 | APIM 시스템 할당 ID·계정 역할·API inbound 인증 정책 |
+
+Text API와 Image API 모두 같은 경계입니다. 클라이언트가 APIM을 호출할 때 모델 계정 키나 자체 관리 ID 토큰은 필요하지 않습니다. APIM 구독 키를 모델의 `api-key`로 사용하지 않습니다.
 
 관리 ID를 켜는 것만으로 AI 계정 권한이 생기지 않습니다. 3단계에서 **각 AI 계정**에 역할을 부여해야 합니다. 토큰을 받는 것과 네트워크를 통과하는 것도 별개입니다.
 
@@ -136,21 +138,21 @@ RBAC 전파에 시간이 걸릴 수 있습니다. 할당 직후 호출이 실패
 | `image-aoai-01` | `https://<image-account-a>.openai.azure.com/openai` | `gpt-image-25-flare` |
 | `image-aoai-02` | `https://<image-account-b>.openai.azure.com/openai` | `gpt-image-25-flare` |
 
-**텍스트:** 두 백엔드의 기본 URL에 `/openai/deployments/<실제 텍스트 배포 이름>`이 포함되고 가져온 작업은 `/chat/completions`입니다. **이미지:** 두 백엔드의 기본 URL은 `/openai`에서 끝나고 4단계의 일반 HTTP API 작업에 `/deployments/<실제 이미지 배포 이름>/images/generations`를 넣습니다. 두 경로 구성을 섞거나 기본 URL에 `api-version`을 넣지 않습니다.
+**텍스트:** 두 백엔드의 기본 URL에 `/openai/deployments/<실제 텍스트 배포 이름>`이 포함되고 가져온 작업은 `/chat/completions`입니다. **이미지:** 두 백엔드의 기본 URL은 `/openai`에서 끝나고 2단계에서 만든 일반 HTTP API 작업에 `/deployments/<실제 이미지 배포 이름>/images/generations`가 있습니다. 두 경로 구성을 섞거나 기본 URL에 `api-version`을 넣지 않습니다.
 
 ### 3-C-2. 자동 생성 백엔드 1개 재사용 + 수동 3개 추가
 
 1. **APIs → Backends**에서 자동 생성된 Text Primary를 엽니다. 실제 ID를 재사용하고 배포 경로가 포함된 URL을 확인하며 중복 생성하지 않습니다.
 2. 나머지만 **+ Create new backend**로 `text-aoai-02`, `image-aoai-01`, `image-aoai-02` 세 개를 위 표대로 만듭니다. 이미 있으면 확인 후 재사용합니다.
 3. 수동 백엔드는 단일 유형과 HTTP 계열 프로토콜을 선택하되 **Runtime URL은 HTTPS**를 사용합니다.
-4. 다음 인증 확인은 자동 생성된 백엔드까지 포함해 네 개 모두에 적용합니다.
-5. **Authorization credentials → Managed identity**에서 **Enable**을 선택합니다.
-6. **Client identity → System assigned identity**를 선택합니다.
-7. **Resource ID**에 정확히 **`https://cognitiveservices.azure.com`**을 입력합니다. 계정 Resource ID나 백엔드 URL을 입력하는 칸이 아닙니다.
-8. 정적 `api-key` 또는 오래된 Authorization 자격이 등록되어 있으면 충돌하지 않도록 해당 백엔드 설정을 정리합니다. 다른 API가 재사용하는 백엔드라면 영향도를 먼저 확인합니다.
-9. 저장 후 관련 단일 백엔드가 **자동 1개 + 수동 3개 = 총 4개**인지 확인합니다. 다섯 개를 만들지 않습니다. 이미지 일반 HTTP API는 2단계에서 이미 만들었으며 Language Model API를 사용하지 않습니다.
+4. 각 백엔드의 이름·HTTPS URL·서킷 브레이커 설정을 저장합니다. **백엔드에서 Managed identity 탭을 반드시 찾을 필요는 없습니다.**
+5. 자동 생성 백엔드까지 포함해 기존 정적 `api-key`·Authorization 자격이 있으면 확인합니다. 아래 API 정책 인증과 충돌하지 않도록 정리하되 다른 API의 사용 여부를 확인하고 공유 자격을 임의 삭제하지 않습니다.
+6. 관련 단일 백엔드가 **자동 1개 + 수동 3개 = 총 4개**인지 확인합니다. 다섯 개를 만들지 않습니다. 이미지 일반 HTTP API는 2단계에서 이미 만들었으며 Language Model API를 사용하지 않습니다.
+7. 아래 풀 구성을 마친 뒤 테스트 전에 **4단계 4-B의 API 수준 관리 ID 인증 정책**을 적용합니다.
 
-본 가이드의 기본 인증 위치는 **개별 백엔드의 Managed identity 설정**입니다. 풀 자체에는 계정 인증을 설정하지 않습니다. 4단계의 API 정책에 같은 토큰 발급을 중복해서 추가할 필요가 없습니다.
+**기존 메뉴 설명은 어디였나요?** 공식 백엔드 문서가 설명하는 경로는 **APIM → APIs → Backends → 개별 단일 백엔드 → Authorization credentials → Managed identity**입니다. APIM 리소스의 Managed identities 메뉴나 풀 설정 화면이 아닙니다. 현재 포털에 보이지 않으면 해당 메뉴 찾기를 필수 조건으로 삼지 않으며 UI 차이의 원인을 단정하지 않습니다.
+
+**이 가이드는 텍스트·이미지 모두 API 정책에서 인증합니다.** 정책 편집기는 **APIs → APIs → 해당 API → Design → All operations → `</>`**입니다. 4-B의 전체 정책에 resource `https://cognitiveservices.azure.com`인 `authentication-managed-identity`가 포함되어 있습니다. 3-A의 시스템 할당 ID와 3-B의 계정별 역할은 그대로 필요합니다.
 
 ### 3-C-3. 서킷 브레이커 추가
 
@@ -184,14 +186,14 @@ RBAC 전파에 시간이 걸릴 수 있습니다. 할당 직후 호출이 실패
 
 - [ ] 단일 백엔드 4개의 ID와 실제 계정 URL이 일치한다.
 - [ ] 텍스트는 Language Model API로 가져왔고 자동 생성 백엔드를 Primary로 재사용했으며 추가 단일 백엔드는 세 개뿐이다.
-- [ ] 모두 System assigned identity와 올바른 audience를 사용한다.
+- [ ] APIM 시스템 할당 ID와 계정별 역할을 확인하고 호출 전 4단계의 API 인증 정책을 적용한다.
 - [ ] 모두 429를 처리하고 Retry-After를 수용하는 규칙이 저장되어 있다.
 - [ ] 5xx 포함 여부와 실제 실습값을 기록했다.
 - [ ] URL에 배포 경로가 중복되지 않는다.
 
 ### 문제 해결
 
-- **관리 ID 옵션 없음:** APIM의 ID 상태와 포털·SKU 지원을 확인합니다. 4단계의 API 수준 인증 대안도 가능하지만 두 방식을 섞지 않습니다.
+- **백엔드 Managed identity 탭 없음:** 이 메뉴 없이 계속 진행하고 4단계의 API 정책 인증을 사용합니다. 백엔드 탭이 없다는 것과 APIM 시스템 할당 ID를 끄는 것을 혼동하지 않습니다.
 - **BackendConnectionFailure:** DNS·방화벽·TLS·실제 계정 호스트명을 점검합니다.
 - **전환이 너무 오래 유지:** 실제 `Retry-After`와 회로 차단 시간을 확인합니다.
 
@@ -209,7 +211,7 @@ RBAC 전파에 시간이 걸릴 수 있습니다. 할당 직후 호출이 실패
 
 ### 목표와 시작 조건
 
-등록된 단일 백엔드를 `text-pool`과 `image-pool`로 묶습니다. 단일 백엔드 네 개의 인증과 회로 차단 규칙이 저장되어 있어야 합니다.
+등록된 단일 백엔드를 `text-pool`과 `image-pool`로 묶습니다. 먼저 URL과 회로 차단 규칙을 저장하고 API 정책 인증은 4단계에서 추가합니다.
 
 ### 3-D-1. 분산 방식을 먼저 선택
 

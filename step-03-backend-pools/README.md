@@ -8,7 +8,7 @@ English | [Korean](../kr/step-03-backend-pools/README.md)
 
 ### Objective and prerequisites
 
-Register the four model-hosting accounts as APIM backends. Complete managed identity and role assignment, and ensure APIM can reach every account.
+Register the four existing model-hosting accounts as APIM backends. Complete managed identity and role assignment, and ensure APIM can reach every account through its public HTTPS endpoint.
 
 ### 3-A-1. Confirm runtime URLs
 
@@ -55,7 +55,7 @@ These are **exercise starting values for observing failover**, not fixed Microso
 1. Put both status-code ranges in **one rule**. Currently only one circuit-breaker rule per backend is supported.
 2. Save, reopen the backend, and check the persisted values.
 3. Repeat on the other backends.
-4. If the portal cannot edit multiple ranges in one rule, do not create two rules. Start with `429-429`; add the 5xx range through the official Backend REST API schema and organizational change process. Do not mark 5xx failover as verified if only 429 was configured.
+4. If the portal cannot edit multiple ranges in one rule, do not create two rules. Use `429-429` for this portal-only exercise and record 5xx coverage as not configured. Do not mark 5xx failover as verified in that case.
 
 ### 3-A-4. Understand the behavior
 

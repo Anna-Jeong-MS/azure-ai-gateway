@@ -21,27 +21,7 @@ Allow APIM to authenticate to model accounts with Microsoft Entra tokens instead
 
 The system-assigned service principal follows the APIM resource lifecycle. Disabling and re-enabling it, or recreating APIM, can change the identity; do not assume existing assignments still apply.
 
-### Optional: inspect or enable using CLI
-
-Use a PowerShell session with `$ResourceGroup` and `$ApimName` set as described in step 01.
-
-```powershell
-az apim show --resource-group $ResourceGroup --name $ApimName `
-  --query identity --output json
-```
-
-Use the following only when the instance has no identity. **If user-assigned identities are already attached, do not simply replace `identity.type` with this command. Add the system-assigned identity in the portal while preserving existing identities.**
-
-```powershell
-az apim update --resource-group $ResourceGroup --name $ApimName `
-  --set identity.type=SystemAssigned
-
-$ApimPrincipalId = az apim show --resource-group $ResourceGroup --name $ApimName `
-  --query identity.principalId --output tsv
-if ([string]::IsNullOrWhiteSpace($ApimPrincipalId)) {
-    throw "APIM principalId is empty. Check the managed identity configuration."
-}
-```
+If user-assigned identities are already attached, preserve them. Enable the system-assigned identity through its own portal tab without removing existing identities. Refresh the page and verify that its status and principal ID remain visible.
 
 ### 2-A-2. Understand the authentication boundaries
 
@@ -104,29 +84,7 @@ This role allows Entra-based inference and some resource/deployment reads. It do
 
 If the same principal/role/scope assignment already exists, do not create a duplicate. Assigning the role to the operator instead of APIM does not complete this task.
 
-### Optional: assign one account using CLI
-
-Replace the inputs and repeat for each account. If accounts use different resource groups or subscriptions, use each account's full actual resource ID.
-
-```powershell
-$ApimPrincipalId = "<apim-principal-id>"
-$AiAccountResourceId = "<full-ai-account-resource-id>"
-$OpenAiUserRoleId = "5e0bd9bd-7b93-4f28-af87-19fc36ad61bd"
-
-az role assignment create `
-  --assignee-object-id $ApimPrincipalId `
-  --assignee-principal-type ServicePrincipal `
-  --role $OpenAiUserRoleId `
-  --scope $AiAccountResourceId
-```
-
-Inspect the assignments:
-
-```powershell
-az role assignment list --scope $AiAccountResourceId `
-  --query "[?principalId=='$ApimPrincipalId'].{role:roleDefinitionName,scope:scope,principal:principalId}" `
-  --output table
-```
+To verify in the portal, open each account's **Access control (IAM) > Role assignments**, filter by the APIM identity, and inspect its role and scope. If accounts are in different resource groups or subscriptions, verify each actual account rather than assuming one assignment covers all four.
 
 ### 2-B-3. Record verification
 

@@ -12,7 +12,7 @@ Azure API Management와 Azure OpenAI를 사용해 텍스트·이미지 모델 �
 
 | 단계 | 묶어서 진행할 작업 |
 | --- | --- |
-| [01. 사전 준비와 리소스 생성](step-01-prepare-resources/README.md) | 입력값·권한·쿼터·네트워크 확인 → AI 계정·모델 배포 → SKU 선택·APIM 생성 |
+| [01. 기존 모델 확인과 APIM 준비](step-01-prepare-resources/README.md) | 기존 엔드포인트·배포 이름 기록 → 권한·공용 연결 확인 → Standard v2 APIM 생성 |
 | [02. 관리 ID와 접근 권한](step-02-identity-access/README.md) | APIM 시스템 할당 관리 ID → AI 계정별 최소 권한 역할 할당 |
 | [03. 백엔드와 부하 분산 풀](step-03-backend-pools/README.md) | 백엔드 4개 → 관리 ID 인증·서킷 브레이커 → 텍스트·이미지 풀 |
 | [04. API 구성과 정책 적용](step-04-api-policies/README.md) | API·작업·APIM 구독 → 풀 라우팅 → 선택적 제한·재시도 |
@@ -23,7 +23,7 @@ Azure API Management와 Azure OpenAI를 사용해 텍스트·이미지 모델 �
 ## 전체 구성
 
 ```text
-클라이언트 -- APIM 구독 키 --> APIM (시스템 할당 관리 ID)
+클라이언트 -- 공용 HTTPS + APIM 구독 키 --> APIM Standard v2 (시스템 할당 관리 ID)
                                |
                                +-- /text  --> text-pool
                                |              +-- text-aoai-01 (리전 A)
@@ -33,7 +33,7 @@ Azure API Management와 Azure OpenAI를 사용해 텍스트·이미지 모델 �
                                               +-- image-aoai-01 (리전 A)
                                               +-- image-aoai-02 (리전 B)
 
-APIM -- Entra 토큰 --> 각 Azure OpenAI 계정
+APIM -- 공용 HTTPS + Entra 토큰 --> 각 Azure OpenAI 계정
 ```
 
 ## 범위와 원본 대응
@@ -45,7 +45,7 @@ APIM -- Entra 토큰 --> 각 Azure OpenAI 계정
 | PDF p.16: 보안·복원력·확장성·관측 개요 | 02~05 |
 | PDF p.20~21: 팀별 2,000 TPM, 구독 ID 기준 분리, 키 없는 인증 | 02, 04의 선택적 토큰 제한, 05 |
 | PDF p.22: PTU/PAYG 백엔드 풀·서킷 브레이커 | 03, 05의 전환 검증 |
-| 요구사항의 SKU·모델 배포·작업자 권한 | 01~02 |
+| 요구사항의 Standard v2·기존 모델 정보·작업자 권한 | 01~02 |
 | 요구사항의 백엔드·풀·API·정책·점검 목록 | 03~05 |
 | PDF p.8·23·29의 의미 기반 캐시, p.9·24의 Content Safety | 이번 필수 구성 밖의 후속 확장 |
 | PDF의 MCP·A2A·API Center·Foundry Preview 소개 | 이번 요구사항의 실습 범위에 포함하지 않음 |
@@ -54,7 +54,7 @@ PDF는 기능 소개 자료이므로 무료 호출량·가격·GA/Preview·지�
 
 ## 공식 문서에 따라 보완한 점
 
-- **SKU와 네트워크:** Standard v2도 인바운드 Private Endpoint와 아웃바운드 VNet Integration을 지원합니다. APIM 자체 멀티 리전 배포는 classic Premium과 Premium v2를 구분합니다. [SKU 비교](https://learn.microsoft.com/en-us/azure/api-management/api-management-features)
+- **확정 구성:** **Standard v2 + 공용 네트워크 접근 활성화**를 사용합니다. 이번 실습에서는 VNet Injection, 아웃바운드 VNet Integration, Private Endpoint를 구성하지 않습니다. 서로 다른 리전의 AI 계정을 호출하는 것과 APIM 자체의 멀티 리전 배포는 별개입니다. [SKU 비교](https://learn.microsoft.com/en-us/azure/api-management/api-management-features)
 - **쿼터:** 리전 분리가 용량 증가를 보장하지 않습니다. 최신 구독 수준 공유 풀 적용 여부를 해당 모델·버전·배포 유형별로 확인합니다. [쿼터와 제한](https://learn.microsoft.com/en-us/azure/foundry/openai/quotas-limits)
 - **API 분리:** 경로가 다르다고 API 분리가 기술적으로 필수인 것은 아닙니다. 이 실습은 텍스트·이미지의 정책과 운영을 분리하려고 API 두 개를 사용합니다.
 - **전환과 재시도:** 회로 차단·풀 선택·현재 요청 재시도는 별개입니다. 텍스트의 백엔드 429만 선택적으로 한 번 재시도하며 이미지 생성 POST는 기본 자동 재시도하지 않습니다.
@@ -62,11 +62,12 @@ PDF는 기능 소개 자료이므로 무료 호출량·가격·GA/Preview·지�
 
 ## 사용 전 확인
 
-- 목표 모델은 텍스트 `gpt-5.5`, 이미지 `gpt-image-2.5-flare`입니다. 실제 구독의 모델·버전·리전·배포 유형을 먼저 확인합니다.
+- 텍스트 `gpt-5.5`와 이미지 `gpt-image-2.5-flare`는 **이미 배포된 상태**입니다. 실제 엔드포인트·배포 이름·버전·유형만 확인하며 AI 계정 생성이나 모델 배포·이름 변경·증설은 수행하지 않습니다.
 - 기본 호출은 Azure OpenAI 계정의 `*.openai.azure.com` 주소와 **배포 경로 + 날짜형 `api-version`** 방식입니다. Foundry 프로젝트 API나 OpenAI v1 경로를 섞지 않습니다. 텍스트 v1 대안은 04단계에 구분했습니다.
 - `<...>`는 사용자가 채울 값입니다. 실제 고객 환경 값과 비밀은 로컬 기록에만 보관합니다.
-- CLI 예시는 PowerShell 문법이며, 기본 작업은 포털 중심입니다.
+- 리소스 설정과 테스트는 정책 편집기·API 테스트 콘솔을 포함해 **Azure Portal에서만** 진행합니다. CLI·PowerShell·Cloud Shell 실행 단계는 없습니다.
+- 공용 연결이 익명 접근을 의미하지는 않습니다. APIM 구독 검증과 모델 계정의 관리 ID·RBAC 인증은 유지합니다.
 - 기존 로컬 PDF·요구사항·이미지·배포 코드·정책은 유지하고 `.gitignore`로 GitHub 업로드에서 제외합니다. 새 문서는 기존 스크립트나 정책 파일을 덮어쓰지 않습니다.
 - 문서 작성 중 Azure 생성·변경·추론 호출은 실행하지 않았습니다. 실제 동작은 05단계에서 검증해야 하며 수행 시 Azure 비용이 발생합니다.
 
-[01. 사전 준비와 리소스 생성으로 시작](step-01-prepare-resources/README.md)
+[01. 기존 모델 확인과 APIM 준비로 시작](step-01-prepare-resources/README.md)

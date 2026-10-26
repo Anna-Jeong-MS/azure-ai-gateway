@@ -10,7 +10,9 @@ English | [Korean](../kr/step-04-api-policies/README.md)
 
 Create a separate HTTP API for each pool and explicitly expose operations. Separate APIs are an operational and policy boundary for this exercise, not a technical requirement.
 
-First verify successful direct calls from step 01 and the saved pools/backends from step 03.
+First verify the existing deployment details from step 01 and saved pools/backends from step 03. A direct Playground call is optional; actual APIM calls are validated in step 05.
+
+`gpt-55` and `gpt-image-25-flare` are example existing deployment names. Substitute the actual names recorded in step 01 throughout operation paths and tests; do not create or rename deployments to match the examples.
 
 ### 4-A-1. Create the text HTTP API
 
@@ -40,7 +42,7 @@ First verify successful direct calls from step 01 and the saved pools/backends f
 | Request content type | `application/json` |
 
 6. Set the query parameter's example/default to the supported version. Clients should also send `api-version`.
-7. Use this minimal request, retaining only fields confirmed by the direct call:
+7. Use this minimal request, retaining only fields supported by the existing deployment's portal sample:
 
 ```json
 {
@@ -85,7 +87,7 @@ Check this minimal request against the actual model's supported options:
 
 ### 4-A-3. Check URL composition
 
-APIM uses the API suffix on the client-facing URL and appends the operation path to the selected backend base URL.
+APIM uses the API suffix on the client-facing URL and appends the operation path to the selected backend base URL. Compare the resulting URL with the existing deployment's portal sample.
 
 | Connection | Text example |
 | --- | --- |
@@ -132,7 +134,7 @@ Keep the pool name and managed identity approach. This table does not establish 
 ### Completion criteria
 
 - [ ] Save both APIs, each with its explicit POST operation.
-- [ ] Confirm backend base URL plus operation path matches the successful direct URL.
+- [ ] Confirm backend base URL plus operation path matches the existing deployment's supported URL.
 - [ ] Create an Active subscription scoped to each API.
 - [ ] Keep text/image API versions and subscription keys separate.
 

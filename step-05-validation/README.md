@@ -34,63 +34,15 @@ Complete sections 5-A-1 through 5-A-3 with baseline policies first. If adding op
 
 Traces and responses can contain tokens, prompts, images, and personal information. Do not upload them to GitHub; sanitize before external sharing. Do not use the obsolete `Ocp-Apim-Trace` header.
 
-### 5-A-2. Optional: call from PowerShell
+### 5-A-2. Record portal test evidence
 
-This example uses the **default date-based API paths**. For the text v1 alternative, update URL and body together as described in step 04.
+Use the API **Test** and response **Trace** tabs only; no local client or command-line tool is needed.
 
-Use **PowerShell 7.1 or later**, which supports `Read-Host -MaskInput`. Prompt for test keys instead of putting their values directly in command history.
-
-```powershell
-$Gateway = "https://<apim-name>.azure-api.net"
-$TextApiVersion = "<verified-text-api-version>"
-$ImageApiVersion = "<verified-image-api-version>"
-
-$TextKey = Read-Host "Text API subscription key" -MaskInput
-$ImageKey = Read-Host "Image API subscription key" -MaskInput
-
-$TextBody = @{
-    messages = @(@{ role = "user"; content = "Reply with OK only." })
-    max_completion_tokens = 1024
-    stream = $false
-} | ConvertTo-Json -Depth 5
-
-$TextResponse = Invoke-RestMethod -Method Post `
-    -Uri "$Gateway/text/deployments/gpt-55/chat/completions?api-version=$TextApiVersion" `
-    -Headers @{ "Ocp-Apim-Subscription-Key" = $TextKey } `
-    -ContentType "application/json" `
-    -Body $TextBody `
-    -TimeoutSec 150
-
-if (-not $TextResponse.choices -or -not $TextResponse.usage) {
-    throw "Text response is missing choices or usage."
-}
-$TextResponse.choices[0].message.content
-$TextResponse.usage
-
-$ImageBody = @{
-    prompt = "A simple blue circle on a white background."
-    n = 1
-    size = "1024x1024"
-} | ConvertTo-Json
-
-$ImageResponse = Invoke-RestMethod -Method Post `
-    -Uri "$Gateway/image/deployments/gpt-image-25-flare/images/generations?api-version=$ImageApiVersion" `
-    -Headers @{ "Ocp-Apim-Subscription-Key" = $ImageKey } `
-    -ContentType "application/json" `
-    -Body $ImageBody `
-    -TimeoutSec 240
-
-if (-not $ImageResponse.data -or $ImageResponse.data.Count -lt 1) {
-    throw "Image response has no data items."
-}
-"Image response items: $($ImageResponse.data.Count)"
-
-Remove-Variable TextKey, ImageKey
-```
-
-Image data remains in memory even when not printed. Remove unnecessary response variables before ending the session. This example does not save generated files or upload image results.
-
-Inspect HTTP exceptions instead of suppressing them with a success-shaped fallback. For reasoning models with empty visible text, inspect `finish_reason`, token usage, and the output-token cap, then adjust within approved limits.
+1. For each API, record the HTTP status, selected backend hostname, final path, API version, and elapsed time in local working notes.
+2. For text, inspect `choices`, `usage`, and `finish_reason` in the response body. For reasoning models with empty visible text, check the output-token cap and adjust only within approved limits.
+3. For images, confirm that `data` contains actual image output in the model's supported format, not just a successful status.
+4. When a call fails, record the actual status, error body, and failing Trace stage. Do not replace it with a success result.
+5. Keep keys, tokens, prompts, generated images, and unredacted traces out of GitHub. Saving generated files is not part of this walkthrough.
 
 ### 5-A-3. Verify access and path boundaries
 
@@ -183,13 +135,13 @@ If controlled endpoints are unavailable, record **failover test not performed**.
 | 429 | APIM limit versus model quota in Trace; Retry-After and actual quota pool |
 | 503 | Available pool members and circuits versus a real model 503 |
 | 500/policy error | Effective policy, expressions, Subscription required, failing stage |
-| Connection failure/timeout | DNS, private endpoints, firewalls, TLS, model latency, client limits |
+| Connection failure/timeout | Public network access, account access rules, public DNS, TLS, model latency, portal/proxy limits |
 
 ### Final completion checklist
 
-- [ ] Prepare all four accounts/deployments with matching names within each pool.
+- [ ] Verify the four existing accounts/deployments and compatible names within each pool; do not create or redeploy models.
 - [ ] Verify models, versions, deployment types, and actual quota scope in the target subscription.
-- [ ] Confirm APIM tier and networking meet requirements.
+- [ ] Confirm **Standard v2**, public network access enabled, and no VNet injection/integration or private endpoints configured for this walkthrough.
 - [ ] Verify the system-assigned identity and OpenAI User role on every account.
 - [ ] Save authentication and circuit-breaker settings on all four single backends.
 - [ ] Confirm both pools' members, priorities, and weights.

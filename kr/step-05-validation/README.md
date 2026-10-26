@@ -35,63 +35,15 @@
 
 Trace와 응답에는 토큰·프롬프트·이미지·개인정보가 포함될 수 있습니다. 로그나 캡처를 GitHub에 올리지 않고 외부 공유 전 비식별 처리합니다. 현재 추적에는 기존 `Ocp-Apim-Trace` 헤더를 사용하지 않습니다.
 
-### 5-A-2. 선택: PowerShell 클라이언트 호출
+### 5-A-2. 포털 테스트 결과 기록
 
-이 예시는 **기본 날짜형 API 경로**용입니다. v1 텍스트 대안을 택했다면 4단계 표에 따라 URL·본문을 함께 변경합니다.
+API의 **Test**와 응답 **Trace** 탭만 사용합니다. 로컬 클라이언트나 명령줄 도구는 필요하지 않습니다.
 
-다음 예시는 `Read-Host -MaskInput`을 지원하는 **PowerShell 7.1 이상**을 사용합니다. 테스트 키는 콘솔 프롬프트에서 입력해 명령 이력에 직접 남기지 않습니다.
-
-```powershell
-$Gateway = "https://<apim-name>.azure-api.net"
-$TextApiVersion = "<verified-text-api-version>"
-$ImageApiVersion = "<verified-image-api-version>"
-
-$TextKey = Read-Host "Text API subscription key" -MaskInput
-$ImageKey = Read-Host "Image API subscription key" -MaskInput
-
-$TextBody = @{
-    messages = @(@{ role = "user"; content = "Reply with OK only." })
-    max_completion_tokens = 1024
-    stream = $false
-} | ConvertTo-Json -Depth 5
-
-$TextResponse = Invoke-RestMethod -Method Post `
-    -Uri "$Gateway/text/deployments/gpt-55/chat/completions?api-version=$TextApiVersion" `
-    -Headers @{ "Ocp-Apim-Subscription-Key" = $TextKey } `
-    -ContentType "application/json" `
-    -Body $TextBody `
-    -TimeoutSec 150
-
-if (-not $TextResponse.choices -or -not $TextResponse.usage) {
-    throw "텍스트 응답의 choices 또는 usage가 없습니다."
-}
-$TextResponse.choices[0].message.content
-$TextResponse.usage
-
-$ImageBody = @{
-    prompt = "A simple blue circle on a white background."
-    n = 1
-    size = "1024x1024"
-} | ConvertTo-Json
-
-$ImageResponse = Invoke-RestMethod -Method Post `
-    -Uri "$Gateway/image/deployments/gpt-image-25-flare/images/generations?api-version=$ImageApiVersion" `
-    -Headers @{ "Ocp-Apim-Subscription-Key" = $ImageKey } `
-    -ContentType "application/json" `
-    -Body $ImageBody `
-    -TimeoutSec 240
-
-if (-not $ImageResponse.data -or $ImageResponse.data.Count -lt 1) {
-    throw "이미지 응답에 data 항목이 없습니다."
-}
-"Image response items: $($ImageResponse.data.Count)"
-
-Remove-Variable TextKey, ImageKey
-```
-
-화면에 출력하지 않은 이미지 데이터도 메모리에는 존재합니다. 세션 종료 전에 필요 없는 응답 변수도 정리합니다. 예시에는 파일 저장이나 이미지 생성 결과의 Git 업로드가 없습니다.
-
-오류가 발생하면 PowerShell의 HTTP 예외를 그대로 확인합니다. 성공처럼 처리하는 `try/catch`나 빈 응답 대체는 넣지 않습니다. reasoning 모델에서 본문이 비어 있으면 `finish_reason`, 사용량, 출력 토큰 상한을 확인하고 승인된 범위에서 조정합니다.
+1. API별 HTTP 상태, 선택된 백엔드 호스트, 최종 경로, API 버전, 소요 시간을 로컬 작업 기록에 남깁니다.
+2. 텍스트는 응답 본문의 `choices`, `usage`, `finish_reason`을 확인합니다. reasoning 모델에서 표시할 본문이 비어 있으면 출력 토큰 상한을 확인하고 승인된 범위에서 조정합니다.
+3. 이미지는 성공 상태뿐 아니라 `data`에 모델이 지원하는 형식의 실제 이미지 출력이 있는지 확인합니다.
+4. 실패 시 실제 상태 코드·오류 본문·실패한 Trace 구간을 기록하고 성공 결과로 바꾸지 않습니다.
+5. 키·토큰·프롬프트·생성 이미지·비식별 처리하지 않은 Trace는 GitHub에 올리지 않습니다. 생성 결과 파일 저장은 이번 실습에 포함하지 않습니다.
 
 ### 5-A-3. 인증·경로 경계 검증
 
@@ -184,13 +136,13 @@ Remove-Variable TextKey, ImageKey
 | 429 | APIM 제한인지 모델 쿼터인지 Trace로 구분, Retry-After와 실제 쿼터 풀 확인 |
 | 503 | 사용 가능한 풀 구성원·회로 상태 또는 실제 모델 503인지 확인 |
 | 500/정책 오류 | 유효 정책, 정책 표현식, Subscription required, 오류 구간 확인 |
-| 연결 실패·타임아웃 | DNS·Private Endpoint·방화벽·TLS·모델 처리 시간·클라이언트 제한 |
+| 연결 실패·타임아웃 | 공용 네트워크 접근·계정 접근 규칙·공용 DNS·TLS·모델 처리 시간·포털/프록시 제한 |
 
 ### 최종 완료 체크리스트
 
-- [ ] 계정 네 개와 모델 배포가 준비되었고 풀별 배포 이름이 같다.
+- [ ] 기존 계정·배포 네 개와 풀별 이름 호환성을 확인했고 모델을 새로 만들거나 재배포하지 않았다.
 - [ ] 모델·버전·배포 유형·쿼터 범위를 실제 구독에서 확인했다.
-- [ ] APIM SKU와 네트워크가 요구사항에 맞는다.
+- [ ] **Standard v2**, 공용 네트워크 접근 활성화, 이번 실습의 VNet Injection·Integration·Private Endpoint 미설정을 확인했다.
 - [ ] 시스템 할당 관리 ID와 계정 네 개의 OpenAI User 역할이 확인된다.
 - [ ] 단일 백엔드 네 개의 관리 ID 인증·회로 차단 규칙이 저장되어 있다.
 - [ ] 두 풀의 구성원·우선순위·가중치를 확인했다.

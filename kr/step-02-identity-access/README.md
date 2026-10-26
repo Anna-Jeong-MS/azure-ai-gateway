@@ -22,27 +22,7 @@ APIM이 모델 키 대신 Microsoft Entra 토큰으로 각 AI 계정을 호출�
 
 시스템 할당 ID는 APIM 수명 주기에 연결된 서비스 주체입니다. ID를 끄고 다시 켜거나 APIM을 재생성하면 기존 역할 할당을 그대로 사용할 수 있다고 가정하지 않습니다.
 
-### 선택: CLI로 확인 또는 활성화
-
-1단계의 PowerShell 변수 `$ResourceGroup`, `$ApimName`을 설정한 세션에서 실행합니다.
-
-```powershell
-az apim show --resource-group $ResourceGroup --name $ApimName `
-  --query identity --output json
-```
-
-ID가 없는 인스턴스에서만 다음을 사용합니다. **기존 사용자 할당 ID가 연결되어 있다면 이 명령으로 `identity.type`을 단순 교체하지 말고 포털에서 시스템 할당 ID를 추가**해 기존 ID를 보존합니다.
-
-```powershell
-az apim update --resource-group $ResourceGroup --name $ApimName `
-  --set identity.type=SystemAssigned
-
-$ApimPrincipalId = az apim show --resource-group $ResourceGroup --name $ApimName `
-  --query identity.principalId --output tsv
-if ([string]::IsNullOrWhiteSpace($ApimPrincipalId)) {
-    throw "APIM principalId가 없습니다. 관리 ID 활성화 상태를 확인하세요."
-}
-```
+기존 사용자 할당 ID가 연결되어 있으면 그대로 보존합니다. 포털의 시스템 할당 탭에서 해당 ID만 켜고 기존 ID를 제거하지 않습니다. 화면을 새로 고쳐 상태와 Principal ID가 유지되는지 확인합니다.
 
 ### 2-A-2. 인증 경계 이해
 
@@ -106,29 +86,7 @@ APIM 관리 ID가 Text A/B, Image A/B를 호출할 수 있도록 **개별 AI 계
 
 동일한 주체·역할·범위의 할당이 이미 있으면 추가 생성할 필요가 없습니다. 작업자 본인에게 역할을 부여하고 완료로 처리하지 않습니다.
 
-### 선택: CLI로 계정 하나에 할당
-
-실제 값으로 채우고 계정마다 반복합니다. AI 계정이 서로 다른 리소스 그룹·구독에 있다면 해당 계정의 실제 Resource ID를 그대로 사용합니다.
-
-```powershell
-$ApimPrincipalId = "<apim-principal-id>"
-$AiAccountResourceId = "<full-ai-account-resource-id>"
-$OpenAiUserRoleId = "5e0bd9bd-7b93-4f28-af87-19fc36ad61bd"
-
-az role assignment create `
-  --assignee-object-id $ApimPrincipalId `
-  --assignee-principal-type ServicePrincipal `
-  --role $OpenAiUserRoleId `
-  --scope $AiAccountResourceId
-```
-
-할당 확인:
-
-```powershell
-az role assignment list --scope $AiAccountResourceId `
-  --query "[?principalId=='$ApimPrincipalId'].{role:roleDefinitionName,scope:scope,principal:principalId}" `
-  --output table
-```
+포털에서 각 계정의 **Access control (IAM) → Role assignments**를 열고 APIM 관리 ID로 필터링하여 역할과 범위를 확인합니다. 계정이 서로 다른 리소스 그룹·구독에 있다면 각각의 실제 계정을 확인하며 한 번의 할당으로 네 계정이 모두 포함된다고 가정하지 않습니다.
 
 ### 2-B-3. 확인 기록
 

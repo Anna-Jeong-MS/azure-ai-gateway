@@ -2,86 +2,41 @@
 
 English | [Korean](kr/README.md)
 
-A step-by-step guide to placing Azure API Management in front of Azure OpenAI text and image models.
+Create a new Azure API Management gateway for already-deployed text and image models, using the Azure portal.
 
-Official documentation checked: **2026-10-26**. Portal labels can change; the guides include English menu names.
+## Configuration
 
-## Five-step guide
+| Item | Setting |
+| --- | --- |
+| APIM tier | **Standard v2**, initially one unit |
+| Network | Public HTTPS; no VNet injection, VNet integration, or private endpoints |
+| Models | Already-deployed `gpt-5.5` and `gpt-image-2.5-flare` |
+| Text API | **Language Model API > Create OpenAI API** |
+| Image API | **HTTP**, with an image-generation operation |
+| Client to APIM | APIM subscription key in `Ocp-Apim-Subscription-Key` |
+| APIM to model | System-assigned Managed Identity through the API inbound policy |
 
-Follow the **five step folders at the repository root** in order. Each groups related tasks and includes inputs, portal instructions, completion criteria, troubleshooting, and Microsoft documentation.
+The text API creates one backend automatically. Reuse it as Text Primary and add Text Secondary plus two image backends: **one automatic + three manual = four single backends**.
+
+## Steps
 
 | Step | Tasks |
 | --- | --- |
-| [01. Existing models and APIM preparation](step-01-prepare-resources/README.md) | Record existing endpoints and deployment names; check permissions and public connectivity; create Standard v2 APIM |
-| [02. Create APIs](step-02-create-apis/README.md) | Immediately after APIM: create text with Language Model API and images with the regular HTTP tile; record the generated text backend |
-| [03. Identity, backends, and pools](step-03-backend-pools/README.md) | Enable identity and account roles; reuse the generated Text Primary; add three backends and both pools |
-| [04. API routing and policies](step-04-api-policies/README.md) | Reuse both APIs; create subscriptions; replace the generated text route with the pool; apply limits/retries only if needed |
-| [05. Validation and operations](step-05-validation/README.md) | Test successful calls, errors, individual backends, and failover; configure monitoring and complete the checklist |
+| [01. Create APIM](step-01-prepare-resources/README.md) | Record model connection details and create Standard v2 APIM |
+| [02. Create APIs](step-02-create-apis/README.md) | Create the text Language Model API and image HTTP API immediately after APIM |
+| [03. Configure identity and backends](step-03-backend-pools/README.md) | Enable identity, assign roles, configure backends/circuit breakers, and create pools |
+| [04. Apply policies](step-04-api-policies/README.md) | Create subscriptions and apply authentication, routing, and optional limits/retries |
+| [05. Test the gateway](step-05-validation/README.md) | Test calls, access controls, individual backends, and failover |
 
-Meet each task's **completion criteria before proceeding**. Add optional features only after basic calls succeed.
+## Request paths
 
-The same five-step structure is available under [kr/](kr/README.md).
-
-**API creation is step 02, directly after APIM creation:** text uses **Language Model API > Create OpenAI API**, while images use **HTTP**, the regular API tile. The text wizard creates one backend automatically. Reuse it as Primary and add only Text Secondary plus the two image backends: **one automatic + three manual = four single backends**.
-
-## Architecture
-
-```text
-Client -- public HTTPS + APIM subscription key --> APIM Standard v2 (system-assigned managed identity)
-                                     |
-                                     +-- /text  --> text-pool
-                                     |              +-- generated Text Primary (region A)
-                                     |              +-- text-aoai-02 (region B)
-                                     |
-                                     +-- /image --> image-pool
-                                                    +-- image-aoai-01 (region A)
-                                                    +-- image-aoai-02 (region B)
-
-APIM -- public HTTPS + Microsoft Entra token --> each Azure OpenAI account
-```
-
-## Authentication contract for both APIs
-
-| Connection | Authentication | Who supplies it |
-| --- | --- | --- |
-| Client to APIM | **APIM subscription key** in `Ocp-Apim-Subscription-Key` | Client sends the key scoped to Text API or Image API |
-| APIM to model | **Managed Identity** through `authentication-managed-identity` | APIM obtains the Entra access token and sets the model-facing Authorization header |
-
-This applies equally to the text Language Model API and the image regular HTTP API. Clients do **not** send Azure OpenAI account keys or managed identity tokens to APIM. An APIM subscription key is not a model account key. APIM validates the client key, removes it before forwarding, and authenticates the model request with its own system-assigned identity.
-
-## Scope and source mapping
-
-The guide turns the local requirements into an implementation sequence for **two text-model accounts and two image-model accounts**, using the local source PDF's identity, token-limit, and backend-pool examples. Customer names, account names, and resource identifiers have not been copied into these guides.
-
-| Source material | Covered in |
+| API | Client-facing path |
 | --- | --- |
-| PDF p.16: security, resiliency, scalability, and observability | Steps 02-05 |
-| PDF p.20-21: 2,000 TPM per team, subscription-ID isolation, keyless authentication | Step 03, optional token limits in step 04, and step 05 |
-| PDF p.22: PTU/PAYG pools and circuit breakers | Step 03 and failover validation in step 05 |
-| Requirements: Standard v2, existing model details, and operator permissions | Steps 01 and 03 |
-| Requirements: APIs, backends, pools, policies, and checks | Steps 02-05 |
-| PDF p.8, 23, 29: semantic caching; p.9, 24: Content Safety | Follow-up extensions outside this required configuration |
-| PDF introductions to MCP, A2A, API Center, and Foundry preview features | Outside this implementation scope |
+| Text | `/text/chat/completions?api-version=<text-version>` |
+| Image | `/image/deployments/<image-deployment>/images/generations?api-version=<image-version>` |
 
-The PDF is a feature overview, not a current pricing or availability contract. Do not reuse its free-call allowances, prices, GA/preview labels, or region lists without checking current documentation. Caching and Content Safety require additional resources, permissions, policies, and tests; completing this guide does not configure them.
+Clients send an APIM subscription key, not a model account key or managed identity token. APIM validates the key, removes it before forwarding, and obtains its own model-access token.
 
-## Clarifications based on official documentation
+Replace `<...>` with actual values. Keep subscription keys, tokens, prompts, images, and unredacted traces out of Git. Resource creation and inference calls incur Azure charges.
 
-- **Fixed configuration:** Use **Standard v2 with public network access enabled**. Do not configure VNet injection, outbound VNet integration, or private endpoints in this walkthrough. Calling AI accounts in different regions does not require multi-region deployment of APIM itself. [Tier comparison](https://learn.microsoft.com/en-us/azure/api-management/api-management-features)
-- **Quota:** Separate regions do not guarantee additional capacity. Check whether the particular model, version, and deployment type use a subscription-level shared quota pool. [Quotas and limits](https://learn.microsoft.com/en-us/azure/foundry/openai/quotas-limits)
-- **API separation:** Different paths do not technically require separate APIs. This guide separates text and image APIs to give them distinct policy and operational boundaries.
-- **Failover and retries:** Circuit breaking, pool selection, and retrying the current request are separate mechanisms. Only backend text 429 responses are optionally retried once; image-generation POST requests are not automatically retried by default.
-- **Authentication:** The client's APIM subscription key is separate from APIM's managed identity for model access. The Cognitive Services OpenAI User role permits inference and some read operations, not inference alone. [Role permissions](https://learn.microsoft.com/en-us/azure/foundry-classic/openai/how-to/role-based-access-control)
-
-## Before starting
-
-- Text `gpt-5.5` and image `gpt-image-2.5-flare` models are **already deployed**. Record their actual endpoints, deployment names, versions, and types; do not create AI accounts or deploy, rename, or resize models.
-- The default examples use Azure OpenAI endpoints and date-based `api-version`. Text uses a deployment-specific backend base plus the generated `/chat/completions` operation; images use an `/openai` base plus a manually added deployment operation. Do not mix these layouts or v1 paths. Step 04 includes a separate text v1 alternative.
-- Replace `<...>` placeholders with your values. Keep customer-specific values and secrets in local records only.
-- All resource configuration and testing use the **Azure portal only**, including its policy editor and API test console. No CLI, PowerShell, or Cloud Shell steps are required.
-- Public connectivity does not mean anonymous access: keep APIM subscription validation and managed identity/RBAC authentication to model accounts enabled.
-- Model authentication is configured in each API's **inbound policy** with `authentication-managed-identity`. The backend **Authorization credentials > Managed identity** tab is not a prerequisite; step 04 includes complete policies for both APIs.
-- Existing local PDFs, requirements, images, deployment code, and policy files remain local and are excluded through `.gitignore`. These guides do not overwrite those files.
-- No Azure resource changes or inference calls were performed while writing the guide. Actual behavior must be verified in step 05. Following the procedures can incur Azure charges.
-
-[Start with existing models and APIM preparation](step-01-prepare-resources/README.md).
+[Start with step 01](step-01-prepare-resources/README.md).

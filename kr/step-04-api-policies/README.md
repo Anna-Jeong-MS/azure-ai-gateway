@@ -1,184 +1,27 @@
-# 04. API 라우팅·구독·정책 적용
+# 04. 정책 적용
 
 [English](../../step-04-api-policies/README.md) | 한국어
 
-[이전: 관리 ID·백엔드·풀](../step-03-backend-pools/README.md) | [전체 목차](../README.md) | [다음: 05. 검증과 운영 점검](../step-05-validation/README.md)
+[이전: 관리 ID·백엔드](../step-03-backend-pools/README.md) | [전체 목차](../README.md) | [다음: 게이트웨이 테스트](../step-05-validation/README.md)
 
-## 4-A. 텍스트·이미지 API와 APIM 구독 구성
-
-
-### 목표와 시작 조건
-
-두 API는 APIM 생성 직후인 2단계에서 이미 만들었습니다. **텍스트는 Language Model API**, **이미지는 일반 HTTP API**를 재사용하며 API나 Text Primary 백엔드를 중복 생성하지 않습니다.
-
-1단계에서 확인한 기존 배포 정보와 3단계의 풀·백엔드 저장 상태를 확인합니다. 직접 Playground 호출은 선택 사항이며 실제 APIM 호출은 5단계에서 검증합니다.
-
-`gpt-55`, `gpt-image-25-flare`는 기존 배포 이름의 예시입니다. 이후 작업 경로와 테스트의 이름을 1단계에서 기록한 실제 이름으로 바꾸며 예시에 맞추려고 모델을 생성하거나 이름을 변경하지 않습니다.
-
-### 4-A-1. 기존 텍스트 Language Model API 확인
-
-1. **2단계 2-A에서 가져온 APIs → APIs → Text API**를 엽니다. 없으면 2단계를 먼저 완료하며 여기서 텍스트 HTTP API를 만들지 않습니다.
-2. **Settings**에서 suffix `text`, HTTPS, **Subscription required = On**을 확인합니다.
-3. **Design**에서 자동 생성된 **POST `/chat/completions`** 작업을 선택합니다. 표시 이름은 다를 수 있습니다.
-4. 두 텍스트 백엔드의 기본 URL에 `/openai/deployments/<실제 텍스트 배포 이름>`이 포함되는지 확인합니다. 작업 경로에 `/deployments/...`를 다시 넣지 않습니다.
-5. Query parameters에 1단계에서 확인한 날짜형 `api-version`을, 요청 content type에 `application/json`을 추가하거나 확인합니다.
-6. 정책 편집기에서 `<generated-text-backend-id>`를 참조하는 자동 생성 `set-backend-service`를 찾습니다. 4-B에서 **단일 백엔드 경로를 `text-pool`로 교체**하고 풀을 덮어쓰는 작업별 경로도 수정 또는 제거합니다.
-7. 최소 요청 예시는 다음과 같습니다. 기존 배포의 포털 샘플에서 지원하는 것으로 확인한 필드만 사용합니다.
-
-```json
-{
-  "messages": [
-    {
-      "role": "user",
-      "content": "Reply with OK only."
-    }
-  ],
-  "max_completion_tokens": 1024,
-  "stream": false
-}
-```
-
-텍스트 배포 이름은 **백엔드 기본 URL**에 있고 생성된 클라이언트 작업 경로에는 없습니다. 생성된 작업·스키마를 유지하며 수동 텍스트 작업이나 passthrough 와일드카드를 추가하지 않습니다.
-
-### 4-A-2. 기존 이미지 일반 HTTP API 확인
-
-**2단계 2-B에서 HTTP 타일로 만든 Image API**를 엽니다. 아래 저장값을 확인하며 이미지에 Language Model API를 사용하거나 API를 중복 생성하지 않습니다.
-
-| 필드 | 입력 |
-| --- | --- |
-| Display name / Name | `Image API` / `image-api` |
-| Web service URL | `https://<image-account-a>.openai.azure.com/openai` |
-| API URL suffix | `image` |
-| Subscription required | On |
-| Operation display name / Name | `Generate image` / `generate-image` |
-| Method | `POST` |
-| URL | `/deployments/gpt-image-25-flare/images/generations` |
-| Query parameter | `api-version`, 1단계에서 확인한 이미지 버전 |
-| Request content type | `application/json` |
-
-최소 요청 예시입니다. 실제 모델의 포털 샘플에서 지원하는 옵션과 대조합니다.
-
-```json
-{
-  "prompt": "A simple blue circle on a white background.",
-  "n": 1,
-  "size": "1024x1024"
-}
-```
-
-### 4-A-3. 경로 조합 확인
-
-텍스트와 이미지는 의도적으로 다른 경로 구성을 사용합니다. APIM은 선택된 백엔드 기본 URL에 작업 경로를 연결합니다. 최종 URL을 기존 배포의 포털 샘플과 대조합니다.
-
-| 구간 | 텍스트 예 |
-| --- | --- |
-| 클라이언트 → APIM | `https://<apim>.azure-api.net/text/chat/completions?api-version=<text-version>` |
-| APIM → Text A | `https://<text-account-a>.openai.azure.com/openai/deployments/gpt-55/chat/completions?api-version=<text-version>` |
-| APIM → Text B | 위와 같은 경로·쿼리, 호스트만 Text B |
-
-이미지 클라이언트 URL:
-
-```text
-https://<apim>.azure-api.net/image/deployments/gpt-image-25-flare/images/generations?api-version=<image-version>
-```
-
-텍스트는 `/openai/deployments/gpt-55`에 `/chat/completions`를, 이미지는 `/openai`에 `/deployments/gpt-image-25-flare/images/generations`를 연결합니다. 이 기준 구성에는 별도의 `rewrite-uri`가 필요하지 않습니다. 자동 생성·상위 정책의 URL/API 버전 변경 여부는 **Calculate effective policy**와 Trace로 확인합니다.
-
-### 4-A-4. API별 테스트 구독 생성
+## 4-1. API 범위 구독 생성
 
 1. APIM **Subscriptions → + Add subscription**을 선택합니다.
-2. 이름을 `text-test`로 지정하고 **Scope → API → Text API**를 선택합니다.
-3. 상태가 **Active**인지 확인합니다.
-4. `image-test`도 만들고 **Image API**로 범위를 지정합니다.
-5. 각 구독의 키는 Portal에서 필요한 때만 확인하고 비밀 저장소 또는 테스트 세션 메모리에만 보관합니다.
-6. 키를 문서·커밋·스크린샷에 남기지 않습니다.
+2. 다음 구독을 **Active** 상태로 생성합니다.
 
-여기서 말하는 구독은 Azure Subscription이 아니라 **APIM Subscription**입니다. 두 API를 한 제품으로 묶어 제공할 때는 Product 범위 구독을 사용할 수도 있지만, 이 실습은 API 범위 구독으로 혼동을 줄입니다.
+| 이름 | 범위 |
+| --- | --- |
+| `text-test` | API → Text API |
+| `image-test` | API → Image API |
 
-팀별 토큰 분리를 검증할 때는 5단계에서 Text API 구독을 하나 더 만듭니다. 공유된 키 하나를 여러 팀이 사용하면 팀별 제한이 분리되지 않습니다.
+3. 두 API의 **Settings**에서 **Subscription required = On**을 확인합니다.
+4. 테스트할 때 각 구독 키를 확인합니다. 클라이언트는 `Ocp-Apim-Subscription-Key`로 해당 키를 전달하며 모델 계정 키나 관리 ID 토큰은 보내지 않습니다.
 
-#### 클라이언트 요청 헤더
+## 4-2. Text API 정책 적용
 
-두 API 모두 클라이언트가 인증 자격으로 전달하는 것은 **APIM 구독 키뿐**입니다. 모델 계정의 `api-key`나 관리 ID Authorization 토큰을 보내지 않습니다. 아래는 명령줄 실행 예제가 아닌 HTTP 헤더 예시이며 포털 **Test** 탭에서 위 JSON 요청 본문과 함께 사용합니다.
-
-텍스트:
-
-```http
-POST /text/chat/completions?api-version=<text-version> HTTP/1.1
-Host: <apim-name>.azure-api.net
-Ocp-Apim-Subscription-Key: <text-api-subscription-key>
-Content-Type: application/json
-```
-
-이미지:
-
-```http
-POST /image/deployments/gpt-image-25-flare/images/generations?api-version=<image-version> HTTP/1.1
-Host: <apim-name>.azure-api.net
-Ocp-Apim-Subscription-Key: <image-api-subscription-key>
-Content-Type: application/json
-```
-
-APIM은 inbound 정책 처리 전에 구독을 검증합니다. 따라서 아래 정책에서 모델 전달 전에 `Ocp-Apim-Subscription-Key`를 제거해도 클라이언트 인증을 생략하는 것이 아닙니다. 이후 모델 요청에는 **APIM 자체 관리 ID 토큰**이 설정됩니다. 두 API 모두 **Subscription required = On**을 유지합니다.
-
-### 참고: 텍스트 v1 API로 변경하는 경우
-
-기본 절차는 날짜형 API입니다. 실제 배포에서 v1을 선택했다면 텍스트의 모든 연결 지점을 함께 변경하고 별도로 검증합니다.
-
-| 항목 | 기본: 배포 경로 API | v1 텍스트 대안 |
-| --- | --- | --- |
-| 두 텍스트 백엔드 Runtime URL | `https://<account>.openai.azure.com/openai/deployments/gpt-55` | `https://<account>.openai.azure.com/openai/v1` |
-| Text API Web service URL | 위 Primary URL | 위 v1 Primary URL |
-| Operation URL | `/chat/completions` | `/chat/completions` |
-| 배포 선택 | URL의 `gpt-55` | JSON 본문의 `"model": "gpt-55"` |
-| Query | 날짜형 `api-version` 필수 | v1 GA에서 날짜형 버전 불필요 |
-| APIM 호출 경로 | `/text/chat/completions` | `/text/chat/completions` |
-
-풀 이름과 관리 ID 방식은 유지합니다. 이 전환 표를 이미지 API 지원의 근거로 사용하지 않습니다. 이미지도 v1로 바꾸려면 해당 이미지 모델의 공식 API·요청 스키마를 별도 확인해야 합니다.
-
-### 완료 기준
-
-- [ ] 2단계의 텍스트 Language Model API·자동 생성 작업과 이미지 일반 HTTP API·명시적 작업을 재사용한다.
-- [ ] 백엔드 URL + 작업 경로가 기존 배포에서 지원하는 URL과 일치한다.
-- [ ] API별 Active 상태의 구독이 있다.
-- [ ] 텍스트·이미지의 API 버전과 키를 혼동하지 않았다.
-
-이 단계에서 API를 호출하면 기본 Primary URL로 갈 수 있습니다. **풀 라우팅 완료 판정은 4단계 정책 적용 이후**에 합니다.
-
-### 공식 문서
-
-- [HTTP API와 작업 수동 생성](https://learn.microsoft.com/en-us/azure/api-management/add-api-manually)
-- [APIM 구독의 범위와 키](https://learn.microsoft.com/en-us/azure/api-management/api-management-subscriptions)
-- [이미지 생성 API 예시](https://learn.microsoft.com/en-us/azure/foundry/openai/how-to/dall-e)
-- [Azure OpenAI v1과 날짜형 API의 차이](https://learn.microsoft.com/en-us/azure/foundry/openai/api-version-lifecycle)
-- [v1 Chat API와 인증](https://learn.microsoft.com/en-us/rest/api/microsoft-foundry/azureopenai/chat?view=rest-microsoft-foundry-v1)
-- [Language Model API 가져오기와 자동 백엔드](https://learn.microsoft.com/en-us/azure/api-management/openai-compatible-llm-api)
-
----
-
-## 4-B. 풀 라우팅·인증·제한 정책 적용
-
-
-### 목표와 시작 조건
-
-API를 올바른 풀로 보내고, 기본 호출 성공 후 선택 기능을 단계적으로 추가합니다. 이 문서의 XML을 사용하며 루트의 기존 로컬 정책 파일은 수정하지 않습니다.
-
-**기본 인증은 각 API inbound의 `authentication-managed-identity` 정책입니다.** 백엔드의 Managed identity 탭은 필요하지 않습니다. 3단계의 APIM 시스템 할당 ID와 역할을 준비하고 API Subscription required는 On으로 유지합니다.
-
-### 4-B-1. 적용 위치와 기존 정책 확인
-
-1. APIM **APIs → APIs → Text API → Design → All operations**를 선택합니다.
-2. 정책 코드 편집기 **`</>`**를 엽니다.
-3. 기존 정책은 승인된 로컬 기록에 보관하고 텍스트 마법사의 자동 생성 정책 및 global/product/operation 범위에서 중복 제한·인증 충돌·단일 백엔드 경로·재시도를 확인합니다.
-4. 아래 Text API 기본 정책을 적용하고 **Save**를 선택합니다.
-5. **Calculate effective policy**로 유효 정책을 확인합니다. 라우팅이나 인증을 덮어쓰는 작업별 정책이 있으면 영향도를 확인한 뒤 정리합니다.
-6. Image API에도 별도의 기본 정책을 적용합니다.
-
-아래 전체 정책은 API 수준에서 모델 접근 토큰을 얻습니다. 텍스트 마법사가 인증 정책을 이미 만들었다면 유효 inbound에서 인증이 한 번 적용되도록 이 기준과 정리합니다. 기존 백엔드 자격이 토큰을 덮어쓰는지도 확인하며 경쟁하는 인증 방식을 섞지 않습니다. 가져온 작업·스키마를 유지하고 API 자체가 아닌 자동 생성 단일 백엔드 경로를 교체합니다.
-
-`<base />`는 상위 정책 상속을 의미합니다. 아래 예시의 `<backend>`에는 직접 `forward-request`를 정의하므로 `<base />`를 함께 추가하지 않습니다. 전역 backend 정책에 필수 처리가 있다면 이를 생략하는 영향도를 검토하고 보존해야 합니다.
-
-### 4-B-2. Text API 기본 정책
+1. **APIs → APIs → Text API → Design → All operations → `</>`**를 엽니다.
+2. API 정책을 다음으로 교체하고 **Save**를 선택합니다. 자동 생성된 작업과 요청 스키마는 유지합니다.
+3. **Calculate effective policy**에서 작업 범위까지 포함한 최종 경로가 `text-pool`인지 확인합니다.
 
 ```xml
 <policies>
@@ -208,14 +51,13 @@ API를 올바른 풀로 보내고, 기본 호출 성공 후 선택 기능을 단
 </policies>
 ```
 
-- **클라이언트의 Authorization을 먼저 삭제**한 뒤 `authentication-managed-identity`가 모델 호출용 인증 헤더를 설정합니다. 이 정책 뒤에서 Authorization을 다시 삭제하거나 덮어쓰지 않습니다.
-- `client-id`를 생략하면 APIM 시스템 할당 ID를 사용합니다. `output-token-variable-name`도 생략했으므로 Authorization이 직접 설정되며 별도의 `set-header`가 필요하지 않습니다.
-- APIM 구독 검증 후에는 구독 키를 모델 계정에 전달할 필요가 없습니다. 삭제하더라도 이미 확인된 `context.Subscription`은 정책에서 사용할 수 있습니다.
-- `buffer-response="false"`는 추후 SSE 응답이 지연되지 않도록 지정한 값입니다. 초기 검증은 `stream: false`로 수행합니다.
-- 120초는 예시 응답 헤더 대기 시간이며 요청 전체의 성공을 보장하지 않습니다.
-- 백엔드 4xx/5xx를 원래 오류로 확인하도록 `fail-on-error-status-code="false"`를 사용합니다. 성공 응답으로 바꾸거나 오류를 숨기지 않습니다.
+자동 생성된 단일 백엔드 경로를 텍스트 풀로 바꾸는 정책입니다. APIM이 inbound 처리 전에 클라이언트 구독 키를 검증하고 클라이언트 자격을 제거한 뒤 시스템 할당 ID로 모델 토큰을 얻습니다. `authentication-managed-identity` 뒤에서 Authorization을 삭제하거나 덮어쓰지 않습니다.
 
-### 4-B-3. Image API 기본 정책
+## 4-3. Image API 정책 적용
+
+1. **APIs → APIs → Image API → Design → All operations → `</>`**를 엽니다.
+2. 아래 정책을 적용하고 저장합니다.
+3. 유효 경로가 `image-pool`인지 확인합니다.
 
 ```xml
 <policies>
@@ -244,21 +86,13 @@ API를 올바른 풀로 보내고, 기본 호출 성공 후 선택 기능을 단
 </policies>
 ```
 
-이미지 생성은 느릴 수 있습니다. `forward-request` timeout은 응답 헤더 대기 시간이며, 공식 문서는 240초를 넘는 값이 네트워크에서 보장되지 않는다고 안내합니다. 클라이언트/프록시 제한도 별도 확인하고 타임아웃을 단순히 무한히 늘리지 않습니다.
+timeout은 응답 헤더 대기 시간이며 네트워크에서 240초를 넘는 값이 보장되지 않을 수 있습니다. 이미지는 완료 여부가 불명확할 때 중복 생성·과금이 발생할 수 있으므로 자동 재시도하지 않습니다.
 
-**이미지 생성 POST는 자동 재시도하지 않습니다.** 타임아웃이나 5xx 뒤에 실제 생성이 완료되었는지 불명확할 수 있어 중복 생성·과금 위험이 있습니다. 클라이언트 SDK의 기본 재시도도 함께 확인합니다.
+## 4-4. 선택적 사용량 제한
 
-### 4-B-4. 기본 호출 먼저 검증
+5단계의 기본 호출이 성공한 뒤 필요한 정책을 해당 API inbound의 `<base />` 바로 다음에 추가합니다.
 
-5단계의 정상 호출 절차만 먼저 수행해 텍스트·이미지 각각 성공을 확인합니다. 다음 선택 기능은 한 번에 하나씩 추가하고 호출 결과를 다시 확인합니다.
-
-### 선택 A. 팀별 텍스트 토큰 제한
-
-PDF의 팀별 제한 예시와 맞춰 실습 시작값을 **구독당 2,000 TPM**으로 둡니다. Azure OpenAI 모델 쿼터를 늘리는 설정은 아닙니다.
-
-1. Text API 기본 정책의 `<inbound>`에서 `<base />` 다음에 아래 조각을 넣습니다.
-2. APIM Subscription required가 켜져 있고 테스트 구독이 Text API 범위인지 확인합니다.
-3. 저장하고 5단계의 팀별 제한 검증을 수행합니다.
+### 텍스트: 구독당 분당 2,000토큰
 
 ```xml
 <llm-token-limit
@@ -270,16 +104,9 @@ PDF의 팀별 제한 예시와 맞춰 실습 시작값을 **구독당 2,000 TPM*
   tokens-consumed-header-name="x-tokens-consumed" />
 ```
 
-- `context.Subscription.Id`를 기준으로 나누므로 **팀별 별도 구독**이 필요합니다. 임의로 변경 가능한 `x-pipeline-id` 헤더를 신뢰 경계로 사용하지 않습니다.
-- 초기 실습은 `estimate-prompt-tokens="false"`로 실제 응답의 `usage`를 사용합니다. `true`를 사용하려면 Language Model API가 가져온 요청 스키마와 토큰 추정 지원을 확인하고 검증합니다. 텍스트를 스키마 없는 수동 HTTP API로 만들었다고 가정하지 않습니다.
-- `false`에서는 응답 후 사용량이 반영되며 이미 진행 중인 호출이 한도를 초과할 수 있습니다. 정확한 사전 차단이나 비용 상한 보장으로 해석하지 않습니다.
-- 스트리밍은 토큰 추정 특성이 다릅니다. 먼저 비스트리밍으로 검증합니다.
-- 같은 counter-key는 여러 정책 범위에서 카운터를 공유할 수 있습니다. `text:` 접두사로 용도를 구분하고 여러 범위에 중복 제한을 넣지 않습니다.
-- TPM 초과는 429, 별도로 설정한 기간별 token quota 초과는 403일 수 있습니다. 모델 백엔드의 429와 구분합니다.
+팀마다 별도 APIM 구독을 사용합니다. 프롬프트 추정을 끈 상태에서는 응답 `usage`로 사용량을 반영하므로 동시 요청이 한도를 초과한 뒤 후속 요청부터 차단될 수 있습니다.
 
-### 선택 B. 이미지 요청 수 제한
-
-Image API `<inbound>`에서 `<base />` 다음에 넣습니다. **분당 5회는 실습 예시**이며 이미지 모델의 토큰 수나 실제 비용을 정확히 나타내지 않습니다.
+### 이미지: 구독당 분당 5회
 
 ```xml
 <rate-limit-by-key
@@ -290,13 +117,11 @@ Image API `<inbound>`에서 `<base />` 다음에 넣습니다. **분당 5회는 
   remaining-calls-header-name="x-ratelimit-remaining-requests" />
 ```
 
-APIM의 분산 rate limit은 완벽히 정확한 횟수를 보장하지 않습니다. 과도한 동시 요청으로 한도를 시험하지 말고 낮은 테스트 한도로 소량 검증합니다.
+예시 제한값이며 비용 상한을 보장하지 않습니다. 분산 게이트웨이의 요청 제한은 근사적으로 동작합니다.
 
-### 선택 C. 텍스트의 백엔드 429에 한해 한 번 재시도
+## 4-5. 선택적 텍스트 백엔드 429 재시도
 
-먼저 기본 요청과 5단계 전환 검증이 성공해야 합니다. 클라이언트 재시도와 합쳐진 최대 호출 횟수·비용을 승인받은 경우에만 사용합니다.
-
-Text API의 **`<backend>` 전체만** 다음 블록으로 교체합니다. Image API에는 적용하지 않습니다.
+텍스트를 한 번 재시도하려면 Text API의 `<backend>`만 다음으로 교체합니다.
 
 ```xml
 <backend>
@@ -313,46 +138,22 @@ Text API의 **`<backend>` 전체만** 다음 블록으로 교체합니다. Image
 </backend>
 ```
 
-- 최대 백엔드 시도 횟수는 **최초 1회 + 재시도 1회 = 2회**입니다.
-- 매 시도 안에서 풀을 다시 선택합니다. Primary의 회로가 실제로 열렸고 Secondary가 사용 가능해야 다른 백엔드로 갈 수 있습니다.
-- APIM inbound의 토큰 제한 429는 이 backend 재시도의 대상이 아닙니다.
-- 같은 백엔드의 `Retry-After`를 무시하고 계속 두드리기 위한 설정이 아닙니다. 회로 차단과 다른 사용 가능한 백엔드가 전제입니다.
-- 5xx·네트워크 타임아웃은 자동 재시도하지 않습니다. 생성 완료 여부가 불명확한 경우를 운영 정책으로 따로 처리합니다.
-- 스트리밍 응답이 클라이언트로 시작된 이후에는 투명한 재시도를 기대하지 않습니다.
+요청당 백엔드 호출은 최대 **2회**입니다. 다른 백엔드 선택은 풀의 회로 상태·가용성이 허용할 때만 이루어집니다. APIM inbound 제한의 429는 재시도 대상이 아닙니다. 이미지·5xx·타임아웃·이미 전송을 시작한 스트림에는 적용하지 않습니다.
 
-### API 정책 인증 확인
+## 완료 기준
 
-이 방식이 **기본**이며 위 두 전체 정책에 이미 포함되어 있습니다. 두 번째 사본을 추가하지 않습니다.
+- [ ] 두 API 모두 API 범위 구독 키를 요구한다.
+- [ ] 각 API의 유효 inbound에 Managed Identity 인증이 한 번 적용된다.
+- [ ] 유효 경로가 각각 `text-pool`, `image-pool`을 참조한다.
+- [ ] 선택적 제한·재시도 횟수를 기록하고 검증했다.
 
-1. **APIs → APIs → Text API → Design → All operations → `</>`**에서 `<inbound>`의 아래 정책을 찾습니다. **Image API**에서도 반복하며 백엔드 인증 메뉴는 필요하지 않습니다.
-2. 클라이언트 Authorization 삭제 **다음**, `set-backend-service` **이전**에 있는지 확인합니다. 유효 정책에 자동 생성·작업별 중복 인증이나 뒤늦은 Authorization 덮어쓰기가 없는지 확인합니다.
-3. 관리 ID 역할은 그대로 필요합니다. 최종 Trace에서 모델 계정으로 Bearer 토큰이 전달되는지만 확인하고 토큰 자체는 복사·기록하지 않습니다.
+## 공식 문서
 
-```xml
-<authentication-managed-identity
-  resource="https://cognitiveservices.azure.com"
-  ignore-error="false" />
-```
-
-`output-token-variable-name`을 지정하지 않으면 이 정책이 Authorization 헤더를 설정합니다. 뒤에서 Authorization을 다시 삭제하면 인증이 사라집니다.
-
-기존 환경이 의도적으로 백엔드 인증을 사용한다면 전환 영향을 먼저 확인하고 두 방식을 무작정 함께 설정하지 않습니다. 실패를 감추려고 `ignore-error="true"`로 바꾸거나 정적 모델 키를 하드코딩하지 않습니다.
-
-### 완료 기준
-
-- [ ] Text API는 `text-pool`, Image API는 `image-pool`을 참조한다.
-- [ ] 관리 ID 토큰이 실제로 적용되며 인증 방식이 중복되지 않는다.
-- [ ] 기본 호출 성공 후 선택 기능을 개별 검증했다.
-- [ ] 제한 수치·재시도 여부·최대 시도 횟수를 기록했다.
-- [ ] 유효 정책에서 상위/작업별 충돌과 backend 상속 영향을 확인했다.
-
-### 공식 문서
-
-- [정책 편집과 범위](https://learn.microsoft.com/en-us/azure/api-management/set-edit-policies)
-- [백엔드 관리 ID 자격](https://learn.microsoft.com/en-us/azure/api-management/backends#configure-managed-identity-for-authorization-credentials)
-- [authentication-managed-identity](https://learn.microsoft.com/en-us/azure/api-management/authentication-managed-identity-policy)
+- [구독과 키](https://learn.microsoft.com/en-us/azure/api-management/api-management-subscriptions)
+- [정책 편집](https://learn.microsoft.com/en-us/azure/api-management/set-edit-policies)
+- [Managed Identity 인증](https://learn.microsoft.com/en-us/azure/api-management/authentication-managed-identity-policy)
 - [set-backend-service](https://learn.microsoft.com/en-us/azure/api-management/set-backend-service-policy)
-- [forward-request와 timeout 제한](https://learn.microsoft.com/en-us/azure/api-management/forward-request-policy)
-- [retry와 실행 횟수](https://learn.microsoft.com/en-us/azure/api-management/retry-policy)
-- [llm-token-limit의 지원 API와 추정 특성](https://learn.microsoft.com/en-us/azure/api-management/llm-token-limit-policy)
-- [rate-limit-by-key](https://learn.microsoft.com/en-us/azure/api-management/rate-limit-by-key-policy)
+- [forward-request](https://learn.microsoft.com/en-us/azure/api-management/forward-request-policy)
+- [토큰 제한](https://learn.microsoft.com/en-us/azure/api-management/llm-token-limit-policy)
+- [요청 수 제한](https://learn.microsoft.com/en-us/azure/api-management/rate-limit-by-key-policy)
+- [재시도](https://learn.microsoft.com/en-us/azure/api-management/retry-policy)

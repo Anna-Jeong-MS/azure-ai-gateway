@@ -1,182 +1,27 @@
-# 04. API routing, subscriptions, and policies
+# 04. Apply policies
 
 English | [Korean](../kr/step-04-api-policies/README.md)
 
-[Previous: identity, backends, and pools](../step-03-backend-pools/README.md) | [Contents](../README.md) | [Next: validation and operations](../step-05-validation/README.md)
+[Previous: identity and backends](../step-03-backend-pools/README.md) | [Contents](../README.md) | [Next: test the gateway](../step-05-validation/README.md)
 
-## 4-A. Configure APIs and subscriptions
+## 4-1. Create API-scoped subscriptions
 
-### Objective and prerequisites
+1. Open APIM **Subscriptions > + Add subscription**.
+2. Create the following subscriptions with state **Active**:
 
-Both APIs were created immediately after APIM in step 02: **text with Language Model API**, **images with the regular HTTP tile**. Reuse them here; do not create duplicate APIs or a second Text Primary backend.
-
-First verify the existing deployment details from step 01 and saved pools/backends from step 03. A direct Playground call is optional; actual APIM calls are validated in step 05.
-
-`gpt-55` and `gpt-image-25-flare` are example existing deployment names. Substitute the actual names recorded in step 01 throughout operation paths and tests; do not create or rename deployments to match the examples.
-
-### 4-A-1. Verify the existing text Language Model API
-
-1. Open **APIs > APIs > Text API**, imported in **step 02, section 2-A**. If missing, return to that step; do not create a text HTTP API here.
-2. Under **Settings**, confirm suffix `text`, HTTPS, and **Subscription required = On**.
-3. In **Design**, select the generated **POST `/chat/completions`** operation; its display name can vary.
-4. Confirm that both text backend bases include `/openai/deployments/<actual-text-deployment>`. Do not add another `/deployments/...` to the operation path.
-5. Add/confirm the date-based `api-version` from step 01 in the query parameters and request content type `application/json`.
-6. In the policy editor, locate the generated `set-backend-service` referencing `<generated-text-backend-id>`. In section 4-B, replace that **single-backend route with `text-pool`** and remove/update any operation-level route that would override it.
-7. Use this minimal request, retaining only fields supported by the existing deployment's portal sample:
-
-```json
-{
-  "messages": [
-    {
-      "role": "user",
-      "content": "Reply with OK only."
-    }
-  ],
-  "max_completion_tokens": 1024,
-  "stream": false
-}
-```
-
-For text, the deployment name belongs to the **backend base URL**, not the generated client operation path. Preserve the generated operation/schema rather than adding another manual text operation or passthrough wildcard.
-
-### 4-A-2. Verify the existing image HTTP API
-
-Open the **Image API created with the HTTP tile in step 02, section 2-B**. Verify the saved settings below; do not use Language Model API for images and do not create another image API here.
-
-| Field | Value |
+| Name | Scope |
 | --- | --- |
-| Display name / Name | `Image API` / `image-api` |
-| Web service URL | `https://<image-account-a>.openai.azure.com/openai` |
-| API URL suffix | `image` |
-| Subscription required | On |
-| Operation display name / Name | `Generate image` / `generate-image` |
-| Method | `POST` |
-| URL | `/deployments/gpt-image-25-flare/images/generations` |
-| Query parameter | `api-version`, using the image version verified in step 01 |
-| Request content type | `application/json` |
+| `text-test` | API > Text API |
+| `image-test` | API > Image API |
 
-Check this minimal request against the actual model's supported options:
+3. Confirm **Subscription required = On** in both APIs' **Settings**.
+4. Retrieve each subscription key when testing. Clients send it in `Ocp-Apim-Subscription-Key`; they do not send a model account key or a managed identity token.
 
-```json
-{
-  "prompt": "A simple blue circle on a white background.",
-  "n": 1,
-  "size": "1024x1024"
-}
-```
+## 4-2. Apply the Text API policy
 
-### 4-A-3. Check URL composition
-
-Text and images deliberately use different layouts. APIM appends each operation path to the selected backend base URL. Compare the final URL with the existing deployment's portal sample.
-
-| Connection | Text example |
-| --- | --- |
-| Client to APIM | `https://<apim>.azure-api.net/text/chat/completions?api-version=<text-version>` |
-| APIM to Text A | `https://<text-account-a>.openai.azure.com/openai/deployments/gpt-55/chat/completions?api-version=<text-version>` |
-| APIM to Text B | Same path and query, with the Text B hostname |
-
-Image client URL:
-
-```text
-https://<apim>.azure-api.net/image/deployments/gpt-image-25-flare/images/generations?api-version=<image-version>
-```
-
-For text, join `/openai/deployments/gpt-55` with `/chat/completions`. For images, join `/openai` with `/deployments/gpt-image-25-flare/images/generations`. No extra `rewrite-uri` is needed for this reference layout. Inspect generated/inherited policies and Trace for URL or API-version overrides.
-
-### 4-A-4. Create API-scoped test subscriptions
-
-1. Open **Subscriptions > + Add subscription**.
-2. Name it `text-test`; set **Scope > API > Text API**.
-3. Confirm its state is **Active**.
-4. Create `image-test` scoped to **Image API**.
-5. Reveal keys in the portal only as needed. Keep them in a secret store or test-session memory.
-6. Do not put keys in documents, commits, or screenshots.
-
-An **APIM subscription is not an Azure subscription**. A product-scoped subscription can be used when publishing the APIs together, but this exercise uses API scopes to avoid confusion.
-
-For per-team token-limit testing, step 05 creates another Text API subscription. Sharing one key across teams does not create separate team limits.
-
-#### Client request headers
-
-For both APIs, the client sends **only the APIM subscription key as its authentication credential**. Do not send a model account `api-key` or a managed identity Authorization token. The examples show HTTP headers, not command-line instructions; supply the JSON request body shown above in the portal's **Test** tab.
-
-Text:
-
-```http
-POST /text/chat/completions?api-version=<text-version> HTTP/1.1
-Host: <apim-name>.azure-api.net
-Ocp-Apim-Subscription-Key: <text-api-subscription-key>
-Content-Type: application/json
-```
-
-Images:
-
-```http
-POST /image/deployments/gpt-image-25-flare/images/generations?api-version=<image-version> HTTP/1.1
-Host: <apim-name>.azure-api.net
-Ocp-Apim-Subscription-Key: <image-api-subscription-key>
-Content-Type: application/json
-```
-
-APIM validates the subscription before processing the inbound policy. Therefore the policies below can remove `Ocp-Apim-Subscription-Key` before model forwarding without removing client authentication. APIM then adds its **own managed identity token** for the model request. Keep **Subscription required = On** on both APIs.
-
-### Reference: switching the text API to v1
-
-The default walkthrough uses date-based APIs. If selecting v1, change every text integration surface together and validate separately.
-
-| Setting | Default deployment-path API | Text v1 alternative |
-| --- | --- | --- |
-| Runtime URLs on both text backends | `https://<account>.openai.azure.com/openai/deployments/gpt-55` | `https://<account>.openai.azure.com/openai/v1` |
-| Text API Web service URL | Primary URL above | Primary v1 URL above |
-| Operation URL | `/chat/completions` | `/chat/completions` |
-| Deployment selection | `gpt-55` in the path | `"model": "gpt-55"` in the JSON body |
-| Query | Date-based `api-version` required | Date-based version not required for v1 GA |
-| APIM path | `/text/chat/completions` | `/text/chat/completions` |
-
-Keep the pool name and managed identity approach. This table does not establish image v1 support. Independently check the image model's official API and request schema before converting it.
-
-### Completion criteria
-
-- [ ] Reuse the text Language Model API/generated operation and the image regular HTTP API/explicit operation created in step 02.
-- [ ] Confirm backend base URL plus operation path matches the existing deployment's supported URL.
-- [ ] Create an Active subscription scoped to each API.
-- [ ] Keep text/image API versions and subscription keys separate.
-
-Calling now can still use the default primary URL. **Pool routing is complete only after section 4-B's policy is applied.**
-
-### Official documentation
-
-- [Manually create HTTP APIs and operations](https://learn.microsoft.com/en-us/azure/api-management/add-api-manually)
-- [APIM subscription scopes and keys](https://learn.microsoft.com/en-us/azure/api-management/api-management-subscriptions)
-- [Image-generation API examples](https://learn.microsoft.com/en-us/azure/foundry/openai/how-to/dall-e)
-- [v1 versus date-based APIs](https://learn.microsoft.com/en-us/azure/foundry/openai/api-version-lifecycle)
-- [v1 Chat API and authentication](https://learn.microsoft.com/en-us/rest/api/microsoft-foundry/azureopenai/chat?view=rest-microsoft-foundry-v1)
-- [Language Model API import and generated backend](https://learn.microsoft.com/en-us/azure/api-management/openai-compatible-llm-api)
-
----
-
-## 4-B. Apply routing, authentication, and optional limits
-
-### Objective and prerequisites
-
-Route each API to its pool, then add optional features incrementally after basic calls work. Use the examples here without changing the existing local policy files at the root.
-
-**Default authentication is the `authentication-managed-identity` policy in each API's inbound section.** No backend Managed identity tab is required. APIM's system-assigned identity and roles from step 03 must be ready, and API **Subscription required** must be On.
-
-### 4-B-1. Check policy scope and existing behavior
-
-1. Select **APIs > APIs > Text API > Design > All operations**.
-2. Open the **`</>`** policy code editor.
-3. Keep an approved local copy of existing policies. Check the text wizard's generated policies and global/product/operation scopes for duplicate limits, conflicting authentication, single-backend routes, or retries.
-4. Apply the text baseline below and select **Save**.
-5. Inspect **Calculate effective policy**. Assess and resolve any operation-level routing or authentication overrides.
-6. Apply the separate image baseline to Image API.
-
-The complete baselines below obtain the model-access token at API scope. If the text wizard already emitted an authentication policy, reconcile it with this baseline so authentication is applied once in the effective inbound flow. Inspect existing backend credentials for overrides instead of combining competing authentication methods. Preserve imported operations and schemas; replace the generated single-backend route, not the API itself.
-
-`<base />` inherits parent policies. These examples define `forward-request` directly in `<backend>`, so do not add `<base />` alongside it. If global backend policies contain mandatory processing, assess the effect of overriding them and preserve required behavior.
-
-### 4-B-2. Text API baseline
+1. Open **APIs > APIs > Text API > Design > All operations > `</>`**.
+2. Replace the API policy with the following and select **Save**. Keep the generated operation and request schema.
+3. Select **Calculate effective policy** and confirm the final route is `text-pool`, including at the operation scope.
 
 ```xml
 <policies>
@@ -206,14 +51,13 @@ The complete baselines below obtain the model-access token at API scope. If the 
 </policies>
 ```
 
-- Delete the **client's Authorization header**, then let `authentication-managed-identity` set the model-facing Bearer header. Do not delete or overwrite Authorization after that policy.
-- With no `client-id`, the policy uses APIM's system-assigned identity. With no `output-token-variable-name`, it sets Authorization directly; a separate `set-header` is not required.
-- After APIM validates the subscription, the key does not need to reach the model account. Removing the header does not remove the already-resolved `context.Subscription`.
-- `buffer-response="false"` avoids unnecessary buffering if SSE is enabled later. Initially test with `stream: false`.
-- The 120-second value is an example response-header wait time, not a guarantee of end-to-end success.
-- `fail-on-error-status-code="false"` preserves backend error responses for inspection. Do not mask failures with success-shaped responses.
+This replaces the automatic single-backend route with the text pool. APIM validates the client subscription key before inbound policy execution, strips client credentials, and obtains the model token using its system-assigned identity. Do not delete or overwrite Authorization after `authentication-managed-identity`.
 
-### 4-B-3. Image API baseline
+## 4-3. Apply the Image API policy
+
+1. Open **APIs > APIs > Image API > Design > All operations > `</>`**.
+2. Apply the policy below and save.
+3. Confirm the effective route is `image-pool`.
 
 ```xml
 <policies>
@@ -242,21 +86,13 @@ The complete baselines below obtain the model-access token at API scope. If the 
 </policies>
 ```
 
-Image generation can take time. `forward-request` timeout waits for response headers; documentation warns that values over 240 seconds might not be honored by the network. Check client/proxy limits separately instead of continually increasing the timeout.
+The timeout waits for response headers; values above 240 seconds might not be honored by the network. Image generation is not automatically retried because uncertain completion can cause duplicate generation and charges.
 
-**Do not automatically retry image-generation POST requests.** A timeout or 5xx can leave generation completion uncertain, creating duplicate images and charges. Check the client SDK's retry defaults as well.
+## 4-4. Optional usage limits
 
-### 4-B-4. Verify baseline calls first
+After basic calls succeed in step 05, add each selected policy immediately after `<base />` in the API's inbound section.
 
-Perform step 05's successful-call checks for both APIs before adding optional features. Add one feature at a time and repeat verification.
-
-### Option A. Per-team text token limits
-
-Use **2,000 TPM per APIM subscription** as the exercise starting point, matching the PDF's team example. This does not increase Azure OpenAI quota.
-
-1. Insert the following immediately after `<base />` in the text API's `<inbound>`.
-2. Confirm **Subscription required** is enabled and the test subscription is scoped to Text API.
-3. Save and perform step 05's team-isolation tests.
+### Text: 2,000 tokens per minute per subscription
 
 ```xml
 <llm-token-limit
@@ -268,16 +104,9 @@ Use **2,000 TPM per APIM subscription** as the exercise starting point, matching
   tokens-consumed-header-name="x-tokens-consumed" />
 ```
 
-- **Each team needs its own APIM subscription.** Do not use an arbitrary caller-controlled `x-pipeline-id` header as a trusted team boundary.
-- Start with `estimate-prompt-tokens="false"` and actual response `usage` for the baseline. To use `true`, inspect the Language Model API's imported request schema and verify supported prompt-token estimation; do not assume the text API was manually created without a schema.
-- With `false`, consumption is updated after responses. In-flight calls can exceed the limit; this is not an exact pre-request spending cap.
-- Streaming has different estimation behavior. Start with non-streaming requests.
-- The same counter key can share a counter across policy scopes. The `text:` prefix separates its purpose; avoid duplicate limits across scopes.
-- Exceeding TPM can return 429. A separately configured period token quota can return 403. Distinguish these from model-backend throttling.
+Use a separate APIM subscription per team. With prompt estimation disabled, consumption is recorded from response `usage`; concurrent requests can exceed the limit before subsequent requests are blocked.
 
-### Option B. Image request-rate limits
-
-Insert after `<base />` in Image API's `<inbound>`. **Five calls per minute is an exercise value**, not an exact measure of model tokens or cost.
+### Images: five requests per minute per subscription
 
 ```xml
 <rate-limit-by-key
@@ -288,13 +117,11 @@ Insert after `<base />` in Image API's `<inbound>`. **Five calls per minute is a
   remaining-calls-header-name="x-ratelimit-remaining-requests" />
 ```
 
-Distributed rate limits are approximate. Use a low test limit and a small number of calls rather than high concurrency.
+These are example limits, not guaranteed spending caps. Rate limiting is approximate across distributed gateways.
 
-### Option C. Retry backend text 429 once
+## 4-5. Optional text retry on backend 429
 
-First verify baseline calls and failover in step 05. Apply this only after approving combined client/gateway attempt counts and cost.
-
-Replace **only the text API's `<backend>` block** with:
+For one text retry, replace only the Text API's `<backend>` section with:
 
 ```xml
 <backend>
@@ -311,48 +138,22 @@ Replace **only the text API's `<backend>` block** with:
 </backend>
 ```
 
-- Maximum backend attempts: **one initial attempt + one retry = two**.
-- Re-select the pool inside every attempt. The primary's circuit must actually be open and the secondary available for a different backend to be selected.
-- An APIM inbound token-limit 429 does not enter this backend retry block.
-- This is not permission to ignore a backend's Retry-After and keep hitting it. It assumes circuit breaking and another available backend.
-- Do not automatically retry 5xx or network timeouts; handle uncertain generation completion separately.
-- Do not expect transparent retries after a streaming response has started reaching the client.
-- Do not apply this block to image generation.
+This permits at most **two backend attempts** per request. A different backend is selected only when the pool's circuit state and availability allow it. APIM inbound-limit 429 responses do not enter this retry. Do not apply it to images, 5xx, timeouts, or a stream that has already started.
 
-### Verify the API-policy authentication
+## Completion criteria
 
-This is the **default**, already included in both complete policies above. Do not add a second copy.
+- [ ] Both APIs require API-scoped subscription keys.
+- [ ] Each API uses one effective inbound Managed Identity authentication policy.
+- [ ] Effective routes point to `text-pool` and `image-pool`.
+- [ ] Optional limits and retry counts are recorded and tested.
 
-1. Open **APIs > APIs > Text API > Design > All operations > `</>`** and locate the policy below in `<inbound>`.
-2. Confirm it appears **after** deleting the client Authorization header and **before** `set-backend-service`.
-3. Repeat for **Image API**. Check the effective policy for generated/operation-level duplicates or later Authorization overrides.
-4. Keep account role assignments from step 03. Inspect the authentication stage and status in Trace without copying or logging tokens. No backend authentication menu is needed.
+## Official documentation
 
-```xml
-<authentication-managed-identity
-  resource="https://cognitiveservices.azure.com"
-  ignore-error="false" />
-```
-
-Without `output-token-variable-name`, this policy sets Authorization. Deleting that header afterward removes the authentication.
-
-If an existing deployment intentionally uses backend-managed authentication, assess it before migrating; do not configure both approaches blindly. Do not change `ignore-error` to `true` to hide failures or hardcode a model key.
-
-### Completion criteria
-
-- [ ] Text API references `text-pool`; Image API references `image-pool`.
-- [ ] Managed identity authentication is actually applied without conflicting duplication.
-- [ ] Verify basic calls before testing each optional feature.
-- [ ] Record configured limits, retry choice, and maximum attempts.
-- [ ] Check inherited/operation policy conflicts and backend-scope override effects.
-
-### Official documentation
-
-- [Edit policies and choose scope](https://learn.microsoft.com/en-us/azure/api-management/set-edit-policies)
-- [Backend managed identity credentials](https://learn.microsoft.com/en-us/azure/api-management/backends#configure-managed-identity-for-authorization-credentials)
-- [authentication-managed-identity](https://learn.microsoft.com/en-us/azure/api-management/authentication-managed-identity-policy)
+- [Subscriptions and keys](https://learn.microsoft.com/en-us/azure/api-management/api-management-subscriptions)
+- [Edit policies](https://learn.microsoft.com/en-us/azure/api-management/set-edit-policies)
+- [Managed Identity authentication](https://learn.microsoft.com/en-us/azure/api-management/authentication-managed-identity-policy)
 - [set-backend-service](https://learn.microsoft.com/en-us/azure/api-management/set-backend-service-policy)
-- [forward-request and timeout limits](https://learn.microsoft.com/en-us/azure/api-management/forward-request-policy)
-- [retry and execution counts](https://learn.microsoft.com/en-us/azure/api-management/retry-policy)
-- [llm-token-limit support and estimation behavior](https://learn.microsoft.com/en-us/azure/api-management/llm-token-limit-policy)
-- [rate-limit-by-key](https://learn.microsoft.com/en-us/azure/api-management/rate-limit-by-key-policy)
+- [forward-request](https://learn.microsoft.com/en-us/azure/api-management/forward-request-policy)
+- [Token limits](https://learn.microsoft.com/en-us/azure/api-management/llm-token-limit-policy)
+- [Request rate limits](https://learn.microsoft.com/en-us/azure/api-management/rate-limit-by-key-policy)
+- [Retries](https://learn.microsoft.com/en-us/azure/api-management/retry-policy)

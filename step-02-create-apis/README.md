@@ -1,77 +1,52 @@
-# 02. Create the text and image APIs
+# 02. Create APIs
 
 English | [Korean](../kr/step-02-create-apis/README.md)
 
-[Previous: existing models and APIM](../step-01-prepare-resources/README.md) | [Contents](../README.md) | [Next: identity, backends, and pools](../step-03-backend-pools/README.md)
+[Previous: create APIM](../step-01-prepare-resources/README.md) | [Contents](../README.md) | [Next: identity and backends](../step-03-backend-pools/README.md)
 
-## 2-A. Create the text Language Model API
+## 2-1. Create the text Language Model API
 
-### Prerequisites and fixed choices
-
-Step 01 has prepared **Standard v2 APIM with public access** and recorded the already-deployed models. Create the APIs now; configure identity and roles in step 03 and API-policy authentication in step 04. Do not test an unauthenticated backend yet.
-
-| API | Portal creation tile | Backend handling |
-| --- | --- | --- |
-| Text API | **Language Model API > Create OpenAI API** | Reuse its one automatically generated backend as Text Primary |
-| Image API | **HTTP** (regular API) | Manually create its two single backends in step 03 |
-
-Use actual existing deployment names instead of the examples `gpt-55` and `gpt-image-25-flare`. These steps create APIM APIs, not model deployments.
-
-### 2-A-1. Open the Language Model API wizard
-
-1. Open the APIM instance immediately after completing step 01.
-2. Select **APIs > APIs > + Add API**.
-3. Under **Define a new API**, select **Language Model API**. **Do not use HTTP for text.**
-4. On **Configure API**, enter:
+1. Open APIM **APIs > APIs > + Add API > Language Model API**.
+2. On **Configure API**, enter:
 
 | Field | Value |
 | --- | --- |
 | Display name | `Text API` |
 | API identifier, if editable | `text-api` |
-| URL | `https://<text-account-a>.openai.azure.com/openai/deployments/gpt-55` |
+| URL | `https://<text-account-a>.openai.azure.com/openai/deployments/<text-deployment-a>` |
 | Path | `text` |
-| API type | **Create OpenAI API**, not passthrough |
-| Static API key | Do not supply one for this managed-identity design |
+| API type | **Create OpenAI API** |
 
-The URL is the existing Text A deployment base. Do not append `/chat/completions` or `?api-version=...` here. The generated operation supplies `/chat/completions`.
+3. Leave static model-key authentication unset. Managed Identity is applied in step 04 after enabling the identity and assigning roles in step 03.
+4. On **Manage token consumption**, leave optional limits and metrics disabled for the initial test.
+5. Leave **Apply semantic caching** and **AI content safety** disabled.
+6. Select **Review > Create**.
+7. Open **Text API > Settings** and confirm HTTPS, suffix `text`, and **Subscription required = On**.
+8. In **Design**, select the generated **POST `/chat/completions`** operation.
+9. Add/confirm query parameter `api-version` using the text API version from step 01, and request content type `application/json`.
 
-5. Do not enter a static model key. If the wizard offers managed identity and it is already enabled, record any generated authentication settings. Otherwise leave static authentication unset. Complete identity/roles in step 03 and use the full API-policy authentication in step 04 before testing; a backend Managed identity tab is not required.
-6. Select **Next** and review **Manage token consumption**, **Apply semantic caching**, and **AI content safety**. Leave optional features off for baseline testing; do not enable features needing unprepared resources.
-7. Select **Review > Create**.
+The URL entered above is the deployment base: do not append `/chat/completions` or the version query to it.
 
-### 2-A-2. Record the generated API and backend
+## 2-2. Record the automatic text backend
 
-1. Open **Text API > Settings** and confirm suffix `text`, HTTPS, and **Subscription required = On**.
-2. In **Design**, find the generated **POST `/chat/completions`** operation. Its display name can vary. Do not add a duplicate manual text operation.
-3. In the operation's query parameters, add or confirm the date-based `api-version` supported by the existing deployment.
-4. Open the policy editor and record the ID referenced by the generated `set-backend-service`.
-5. Open **APIs > Backends**, find that same single backend, and record its actual ID, runtime URL, and authentication settings.
-6. Use this generated backend as Text Primary. In subsequent documents, **`<generated-text-backend-id>` means the actual recorded ID**, not a name to type literally.
+1. Open the Text API policy editor and find the generated `set-backend-service`.
+2. Record its `backend-id`.
+3. Open **APIs > Backends** and select that backend.
+4. Record its actual ID and runtime URL.
 
-**Do not create an extra `text-aoai-01`, and do not import Text B as another API just to create a backend.** Step 03 adds only Text Secondary and the two image backends.
+This is **Text Primary**. Use its actual ID wherever this guide shows `<generated-text-backend-id>`. Step 03 creates only Text Secondary and the two image backends.
 
-Reference URL layout:
+| Item | Text value |
+| --- | --- |
+| Primary backend base | `https://<text-account-a>.openai.azure.com/openai/deployments/<text-deployment-a>` |
+| Generated operation | `POST /chat/completions` |
+| Client path | `/text/chat/completions?api-version=<text-version>` |
 
-```text
-Generated Text Primary backend:
-https://<text-account-a>.openai.azure.com/openai/deployments/gpt-55
+Confirm that the backend base plus operation forms the model's supported URL, with the deployment path included only once.
 
-Generated text operation:
-POST /chat/completions
+## 2-3. Create the image regular HTTP API
 
-Client URL:
-https://<apim-name>.azure-api.net/text/chat/completions?api-version=<text-version>
-```
-
-If generated settings differ, inspect the backend URL and operation together before proceeding. The final upstream URL must contain `/openai/deployments/<actual-name>/chat/completions` exactly once. Do not mix this date-based layout with a v1 endpoint.
-
----
-
-## 2-B. Create the image regular HTTP API
-
-### 2-B-1. Create the API
-
-1. Select **APIs > APIs > + Add API > HTTP**. **Do not select Language Model API for images.**
+1. Select **APIs > APIs > + Add API > HTTP**.
 2. Enter:
 
 | Field | Value |
@@ -82,41 +57,30 @@ If generated settings differ, inspect the backend URL and operation together bef
 | Scheme | HTTPS |
 | Subscription required | On |
 
-3. Select **Create**, then confirm the settings under **Settings**.
+3. Select **Create**.
+4. Open **Design > + Add operation** and enter:
 
-### 2-B-2. Add the image operation
+| Field | Value |
+| --- | --- |
+| Display name / Name | `Generate image` / `generate-image` |
+| Method | `POST` |
+| URL | `/deployments/<image-deployment>/images/generations` |
+| Query parameter | `api-version`, using the image API version from step 01 |
+| Request content type | `application/json` |
 
-1. Select **Design > + Add operation**.
-2. Set **Display name / Name** to `Generate image` / `generate-image`.
-3. Set **Method** to `POST`.
-4. Set **URL** to `/deployments/gpt-image-25-flare/images/generations`, replacing the deployment name with its actual existing value.
-5. Add/confirm query parameter `api-version` from the image deployment's portal sample.
-6. Set request content type to `application/json` and save.
+5. Save the operation.
 
-```text
-Image backend base:
-https://<image-account-a>.openai.azure.com/openai
+The image backend base ends at `/openai`; the operation supplies the deployment path. Use the same image deployment name in both image accounts.
 
-Image operation:
-POST /deployments/gpt-image-25-flare/images/generations
+## Completion criteria
 
-Client URL:
-https://<apim-name>.azure-api.net/image/deployments/gpt-image-25-flare/images/generations?api-version=<image-version>
-```
+- [ ] Text uses Language Model API and its generated chat-completions operation.
+- [ ] Record the automatically generated Text Primary backend ID.
+- [ ] Image uses the regular HTTP API and the manually added image-generation operation.
+- [ ] Both APIs require an APIM subscription. Continue to step 03 before testing.
 
-The image API is a regular API with an explicitly added operation. Do not assume the text wizard created its backend credentials or pool. Step 03 creates the image backends; step 04 replaces the initial primary URL with `image-pool`.
+## Official documentation
 
-### Completion criteria
-
-- [ ] Text was created with **Language Model API**, and its generated chat-completions operation is present.
-- [ ] Record the generated Text Primary backend's actual ID; do not create a duplicate.
-- [ ] Image was created with the **HTTP** tile and an explicit image-generation POST operation.
-- [ ] Record suffixes, operation paths, deployment names, and the two API versions.
-- [ ] Both APIs require subscriptions; defer final calls until identity, routing, and test subscriptions are ready.
-
-### Official documentation
-
-- [Import Language Model API: generated backend and route](https://learn.microsoft.com/en-us/azure/api-management/openai-compatible-llm-api)
-- [Manually add a regular HTTP API and operations](https://learn.microsoft.com/en-us/azure/api-management/add-api-manually)
-- [Managed identity authentication policy](https://learn.microsoft.com/en-us/azure/api-management/authentication-managed-identity-policy)
-- [Image-generation API examples](https://learn.microsoft.com/en-us/azure/foundry/openai/how-to/dall-e)
+- [Import Language Model API](https://learn.microsoft.com/en-us/azure/api-management/openai-compatible-llm-api)
+- [Create an HTTP API and operations](https://learn.microsoft.com/en-us/azure/api-management/add-api-manually)
+- [Image-generation API](https://learn.microsoft.com/en-us/azure/foundry/openai/how-to/dall-e)

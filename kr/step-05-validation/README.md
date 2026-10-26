@@ -1,163 +1,103 @@
-# 05. 검증과 운영 점검
+# 05. 게이트웨이 테스트
 
 [English](../../step-05-validation/README.md) | 한국어
 
-[이전: 04. API 구성과 정책 적용](../step-04-api-policies/README.md) | [전체 목차](../README.md)
+[이전: 정책 적용](../step-04-api-policies/README.md) | [전체 목차](../README.md)
 
-## 5-A. 정상·오류·전환 검증과 운영 점검
+## 5-1. Text API 테스트
 
+1. **APIs → APIs → Text API → Test**를 엽니다.
+2. 자동 생성된 **POST `/chat/completions`** 작업을 선택합니다.
+3. 1단계의 텍스트 `api-version`을 입력합니다.
+4. 포털 기본 all-access 구독 키를 **Text API 범위의 `text-test` 키**로 바꿉니다.
+5. 아래 헤더·본문을 입력하고 **Trace**를 선택합니다.
 
-### 목표와 시작 조건
+```http
+POST /text/chat/completions?api-version=<text-version> HTTP/1.1
+Host: <apim-name>.azure-api.net
+Ocp-Apim-Subscription-Key: <text-api-subscription-key>
+Content-Type: application/json
 
-모델 호출 성공뿐 아니라 **실제 선택된 백엔드**, 권한 경계, 제한과 전환 동작을 확인합니다. Azure 비용이 발생하는 테스트이므로 비운영 환경·최소 호출 수로 수행합니다.
+{
+  "messages": [{"role": "user", "content": "Reply with OK only."}],
+  "max_completion_tokens": 1024,
+  "stream": false
+}
+```
 
-먼저 기본 정책으로 5-A-1~5-A-3을 완료하고, 선택 정책을 넣었다면 5-A-4를 수행합니다. 회로 전환 테스트는 별도의 승인을 받은 뒤 진행합니다.
+6. HTTP 200, 응답 `choices`·`usage`를 확인합니다. 표시할 본문이 비어 있으면 `finish_reason`을 확인합니다.
+7. **Trace → Inbound / Backend**에서 Managed Identity 인증과 선택된 백엔드를 확인합니다.
+8. 최종 모델 URL이 `https://<text-account>.openai.azure.com/openai/deployments/<text-deployment>/chat/completions?api-version=<text-version>`이며 배포 경로가 한 번만 있는지 확인합니다.
 
-### 5-A-1. Portal에서 정상 호출
+## 5-2. Image API 테스트
 
-#### 텍스트
+1. **Image API → Test → Generate image**를 엽니다.
+2. 이미지 API 버전, **Image API 범위의 `image-test` 키**, 아래 요청을 입력합니다.
+3. **Trace**를 선택합니다.
 
-1. APIM **APIs → APIs → Text API → Test**를 엽니다.
-2. 텍스트 Language Model API가 **자동 생성한 POST `/chat/completions` 작업**을 선택합니다. 표시 이름은 다를 수 있습니다.
-3. `api-version`에 1단계에서 성공한 텍스트 버전을 넣습니다.
-4. `Content-Type: application/json`과 **`Ocp-Apim-Subscription-Key: <text-api-subscription-key>`**를 확인합니다. 포털 테스트 콘솔의 기본 all-access 키 대신 Text API 범위 테스트 키를 선택하거나 덮어씁니다. Azure OpenAI `api-key`나 클라이언트 Authorization 토큰은 보내지 않습니다.
-5. 4단계의 JSON 본문을 넣습니다.
-6. **Trace**를 선택하고 응답의 **Trace → Inbound / Backend / Outbound / On error**를 확인합니다.
-7. 최종 백엔드 URL에 `/openai/deployments/gpt-55/chat/completions`가 한 번만 있는지 확인합니다.
-8. HTTP 200뿐 아니라 `choices`와 `usage` 등 기대 응답 구조를 확인합니다.
+```http
+POST /image/deployments/<image-deployment>/images/generations?api-version=<image-version> HTTP/1.1
+Host: <apim-name>.azure-api.net
+Ocp-Apim-Subscription-Key: <image-api-subscription-key>
+Content-Type: application/json
 
-#### 이미지
+{
+  "prompt": "A simple blue circle on a white background.",
+  "n": 1,
+  "size": "1024x1024"
+}
+```
 
-1. Image API의 **Generate image** 작업에서 같은 절차를 반복합니다.
-2. 이미지용 API 버전·**`Ocp-Apim-Subscription-Key: <image-api-subscription-key>`**·JSON 본문을 사용합니다. 모델 계정 키나 클라이언트 Authorization 토큰이 아닌 Image API 범위 테스트 키를 사용합니다.
-3. 최종 경로가 `/openai/deployments/gpt-image-25-flare/images/generations`인지 확인합니다.
-4. HTTP 200과 `data` 배열의 실제 이미지 데이터 등 해당 모델의 응답 구조를 확인합니다. 선택한 모델에 따라 base64 등 출력 형식이 다를 수 있습니다.
+4. HTTP 200과 `data`의 실제 이미지 출력을 확인합니다.
+5. 선택된 이미지 백엔드, Managed Identity 인증, 최종 `/openai/deployments/<image-deployment>/images/generations` 경로를 확인합니다.
 
-Trace와 응답에는 토큰·프롬프트·이미지·개인정보가 포함될 수 있습니다. 로그나 캡처를 GitHub에 올리지 않고 외부 공유 전 비식별 처리합니다. 현재 추적에는 기존 `Ocp-Apim-Trace` 헤더를 사용하지 않습니다.
+두 API 모두 클라이언트는 APIM 키만 전달합니다. 해당 키가 모델에 전달되지 않고 APIM이 모델 호출용 Authorization을 설정하는지 확인합니다. 토큰 값은 복사하거나 기록하지 않습니다.
 
-두 API 모두 inbound 관리 ID 정책이 실행되고 클라이언트가 모델 자격을 보내지 않아도 호출되는지 확인합니다. APIM 구독 키는 모델에 전달하지 않으며 모델 호출용 Authorization은 APIM이 생성합니다. 정책 실행·상태만 확인하고 토큰 값은 노출하지 않습니다.
+## 5-3. 접근 제어 테스트
 
-### 5-A-2. 포털 테스트 결과 기록
-
-API의 **Test**와 응답 **Trace** 탭만 사용합니다. 로컬 클라이언트나 명령줄 도구는 필요하지 않습니다.
-
-1. API별 HTTP 상태, 선택된 백엔드 호스트, 최종 경로, API 버전, 소요 시간을 로컬 작업 기록에 남깁니다.
-2. 텍스트는 응답 본문의 `choices`, `usage`, `finish_reason`을 확인합니다. reasoning 모델에서 표시할 본문이 비어 있으면 출력 토큰 상한을 확인하고 승인된 범위에서 조정합니다.
-3. 이미지는 성공 상태뿐 아니라 `data`에 모델이 지원하는 형식의 실제 이미지 출력이 있는지 확인합니다.
-4. 실패 시 실제 상태 코드·오류 본문·실패한 Trace 구간을 기록하고 성공 결과로 바꾸지 않습니다.
-5. 키·토큰·프롬프트·생성 이미지·비식별 처리하지 않은 Trace는 GitHub에 올리지 않습니다. 생성 결과 파일 저장은 이번 실습에 포함하지 않습니다.
-
-### 5-A-3. 인증·경로 경계 검증
-
-아래 테스트는 한 번씩만 수행하고 결과를 기록합니다.
-
-| 테스트 | 기대 결과 | 확인할 것 |
-| --- | --- | --- |
-| 올바른 Text 키 + Text API | 200 | Text A/B 중 선택된 호스트, 올바른 배포 경로 |
-| 올바른 Image 키 + Image API | 200 | Image A/B 중 선택된 호스트, 실제 이미지 응답 |
-| 구독 키 없음/잘못된 키 | APIM에서 거절, 보통 401 | 모델 백엔드까지 전달되지 않았는지 |
-| Text API 범위 키로 Image API 호출 | 거절 | all-APIs/관리자 키가 아닌지 확인 |
-| 노출하지 않은 작업 경로 | APIM의 404 | 와일드카드로 임의 배포가 노출되지 않았는지 |
-
-권한 검증을 위해 운영 AI 계정의 RBAC를 삭제하거나 네트워크를 차단하지 않습니다. 401/403은 Trace에서 APIM 단계인지 모델 계정 단계인지 먼저 구분합니다.
-
-### 5-A-4. 선택 정책 검증
-
-#### 팀별 텍스트 토큰 제한
-
-1. 4단계와 같은 방식으로 Text API 범위의 두 번째 Active 구독 `text-team-b`를 만듭니다.
-2. 두 팀이 서로 다른 APIM Subscription ID와 키를 사용하는지 확인합니다.
-3. 비운영 환경에서 4단계의 토큰 한도를 낮은 테스트 값으로 조정하고 소량 요청을 보냅니다. 모델 쿼터를 소진하는 방식으로 테스트하지 않습니다.
-4. Team A에서 사용량을 확인하고 제한을 넘은 후의 요청이 APIM 429로 차단되는지 확인합니다.
-5. `estimate-prompt-tokens="false"`에서는 사용량이 응답 후 반영됩니다. 첫 초과 요청·동시 요청이 정확히 한도에서 차단된다고 판정하지 않습니다.
-6. Team B 키의 별도 카운터로 호출 가능한지 확인합니다.
-7. 응답의 `x-tokens-consumed`, `x-ratelimit-remaining-tokens`, `Retry-After`와 Trace에서 제한의 발생 위치를 확인합니다.
-8. 한도를 원래 승인값으로 복구합니다.
-
-모델 자체 쿼터의 429, APIM 토큰 제한의 429, 회로 차단 이후의 503은 다른 결과입니다.
-
-#### 이미지 요청 제한
-
-1. 비운영 환경에서 요청 한도를 낮춰 테스트합니다.
-2. `remaining-calls` 헤더와 APIM 제한 429를 확인합니다.
-3. 꼭 필요한 소수의 이미지 요청만 보냅니다. 분산 카운터이므로 “정확히 6번째에 반드시 차단”을 합격 기준으로 두지 않습니다.
-4. 한도를 원래 승인값으로 복구합니다.
-
-### 5-A-5. 백엔드별 라우팅 검증
-
-평상시 Primary만 호출되면 Secondary 설정 오류가 숨겨질 수 있습니다.
-
-1. 승인된 비운영 API에서 풀 설정과 정책의 기존 값을 기록합니다.
-2. Text API의 `set-backend-service`를 2단계에서 기록한 **자동 생성 Text Primary의 실제 ID**로 잠시 지정해 성공을 확인합니다. `<generated-text-backend-id>`를 그대로 입력하지 않습니다.
-3. `text-aoai-02`로 바꿔 같은 요청의 성공을 확인합니다.
-4. **`text-pool`로 복구**합니다. 선택적 retry 블록에도 같은 라우팅이 있으면 재시도를 잠시 해제하고 검증한 뒤 원래 정책을 복구합니다.
-5. Image API에서도 `image-aoai-01`, `image-aoai-02`를 각각 검증한 뒤 **`image-pool`로 복구**합니다.
-6. 최종 유효 정책에 개별 백엔드가 남아 있지 않은지 확인합니다.
-
-공유 운영 API의 정책을 위 방법으로 바꾸지 않습니다. 해당 경우 테스트용 API revision 또는 별도 비운영 APIM을 사용합니다.
-
-### 5-A-6. 회로 차단과 전환 검증
-
-#### A. 안전한 구성 검증
-
-1. 두 풀의 우선순위·가중치와 단일 백엔드 차단 규칙을 확인합니다.
-2. 5-A-5에서 각 실계정 백엔드의 인증·네트워크·모델 호출이 성공했는지 확인합니다.
-3. 이것은 **구성 및 개별 호출 검증**이지 실제 장애 전환 성공 증거는 아닙니다.
-
-#### B. 실제 동작 검증: 승인된 격리 환경에서만
-
-1. 운영 모델 쿼터 소진 대신, 조직이 소유·통제하는 테스트용 HTTPS 엔드포인트 두 개를 준비합니다. 공개 테스트 서비스에 토큰·구독 키를 보내지 않습니다.
-2. Primary 테스트 엔드포인트는 제어 가능한 429와 `Retry-After: 60`, Secondary는 식별 가능한 정상 응답을 반환하도록 구성합니다.
-3. 별도 테스트 백엔드 두 개와 테스트 풀·API에 같은 우선순위/차단 조건을 적용합니다. 모델 인증 정책이나 관리 ID 자격은 이 테스트 리소스에 붙이지 않습니다. 상위 정책도 확인하고 클라이언트 Authorization·api-key·APIM 키를 전송 전에 제거하여 모델 토큰이 테스트 엔드포인트로 가지 않게 합니다.
-4. Primary가 정상일 때 Primary 선택을 확인합니다.
-5. Primary를 429 상태로 바꾸고 Trace에서 오류가 **백엔드에서 발생했는지** 확인합니다.
-6. 회로가 열린 뒤 후속 요청이 Secondary로 가는지 Trace와 테스트 엔드포인트 로그로 확인합니다. 노드별 근사 동작이므로 최초 한 요청의 결과만으로 판정하지 않습니다.
-7. 재시도 미적용 상태에서는 최초 429가 그대로 반환될 수 있습니다. 텍스트 1회 재시도를 적용했다면 한 클라이언트 요청의 백엔드 시도가 최대 2회인지 확인합니다.
-8. Primary를 정상으로 복구하고 실제 차단·Retry-After 시간이 지난 후 다시 선택되는지 확인합니다.
-9. 규칙에 5xx가 포함되었다면 테스트 엔드포인트의 503으로 별도 검증합니다.
-10. 테스트용 정책·엔드포인트·리소스만 승인된 절차로 정리합니다. 공유 리소스 그룹 전체 삭제는 하지 않습니다.
-
-테스트 엔드포인트 준비가 안 되었다면 **전환 테스트 미실시**로 기록합니다. 구성 화면만 보고 실제 전환이 검증되었다고 쓰지 않습니다.
-
-### 5-A-7. 운영 모니터링
-
-1. 필요 시 APIM **Application Insights → Add**에서 승인된 Application Insights를 연결합니다. 새 리소스 비용을 확인합니다.
-2. 각 API **Settings → Diagnostics**에서 로거와 샘플링을 설정합니다.
-3. 기본적으로 요청/응답 본문과 비밀 헤더를 수집하지 않습니다. 특히 Authorization, APIM 키, 프롬프트와 이미지 데이터의 수집 여부를 확인합니다.
-4. 지연 시간·응답 상태·백엔드 실패율·429/503·호출량을 관찰하고, 토큰 비용 가시성이 필요하면 별도의 토큰 메트릭 정책과 비용 집계를 설계합니다. 기본 요청 로깅만 켰다고 팀별 토큰 비용이 자동 완성되지는 않습니다.
-5. 관리 ID로 Application Insights 수집을 구성할 경우 공식 문서의 별도 `Monitoring Metrics Publisher` 역할과 인증 설정이 필요합니다. 모델 계정의 OpenAI User 역할로 대체하지 않습니다.
-
-### 오류별 점검
-
-| 현상 | 먼저 확인할 항목 |
+| 테스트 | 기대 결과 |
 | --- | --- |
-| APIM 401 | 구독 키, Active 상태, API 범위, Subscription required |
-| 모델 401 | inbound authentication-managed-identity 정책, APIM ID·역할, audience, 토큰 헤더의 뒤늦은 삭제·덮어쓰기 |
-| 403 | 오류 발생 위치, AI 계정 RBAC, 네트워크 제한, 선택적 token quota |
-| 404 | APIM 작업 매칭 여부 → 최종 백엔드 호스트/배포 이름/중복 경로/API 버전 |
-| 429 | APIM 제한인지 모델 쿼터인지 Trace로 구분, Retry-After와 실제 쿼터 풀 확인 |
-| 503 | 사용 가능한 풀 구성원·회로 상태 또는 실제 모델 503인지 확인 |
-| 500/정책 오류 | 유효 정책, 정책 표현식, Subscription required, 오류 구간 확인 |
-| 연결 실패·타임아웃 | 공용 네트워크 접근·계정 접근 규칙·공용 DNS·TLS·모델 처리 시간·포털/프록시 제한 |
+| 올바른 API 범위 구독 키 | 모델 응답 성공 |
+| APIM 키 누락·오류 | APIM에서 거절, 보통 401, 모델 호출 없음 |
+| Text API 범위 키로 Image API 호출 | 거절 |
+| 노출하지 않은 작업 경로 | APIM 404 |
 
-### 최종 완료 체크리스트
+실패하면 Trace 구간과 오류 본문을 확인합니다. 게이트웨이 401은 APIM 키·범위, 모델 401/403은 관리 ID·계정 역할·audience, 연결 실패는 공용 접근·계정 접근 규칙을 확인합니다.
 
-- [ ] 기존 계정·배포 네 개와 풀별 이름 호환성을 확인했고 모델을 새로 만들거나 재배포하지 않았다.
-- [ ] 모델·버전·배포 유형·쿼터 범위를 실제 구독에서 확인했다.
-- [ ] **Standard v2**, 공용 네트워크 접근 활성화, 이번 실습의 VNet Injection·Integration·Private Endpoint 미설정을 확인했다.
-- [ ] 시스템 할당 관리 ID와 계정 네 개의 OpenAI User 역할이 확인된다.
-- [ ] 자동 생성 Text Primary를 재사용하고 자동 1개 + 수동 3개의 단일 백엔드 URL·회로 차단을 저장했으며 Text API·Image API의 API 수준 인증을 확인했다.
-- [ ] 두 풀의 구성원·우선순위·가중치를 확인했다.
-- [ ] APIM 생성 직후 2단계에서 텍스트 Language Model API·이미지 일반 HTTP API를 만들었고 자동/수동 작업과 범위별 구독을 확인했다.
-- [ ] 모든 개별 백엔드 정상 호출과 풀을 통한 최종 호출을 확인했다.
-- [ ] 선택 정책의 제한·최대 재시도 횟수를 검증했다.
-- [ ] 회로 전환은 실제 검증 결과 또는 미실시 사유를 기록했다.
-- [ ] 테스트 후 정책·한도·풀 라우팅을 승인된 최종값으로 복구했다.
-- [ ] 비밀 값과 고객별 결과 자료를 GitHub에 포함하지 않았다.
+## 5-4. 백엔드 네 개 검증
 
-### 공식 문서
+개별 백엔드 테스트에는 선택적 재시도를 넣지 않은 기본 정책을 사용합니다.
 
-- [Portal Trace와 현재 추적 방식](https://learn.microsoft.com/en-us/azure/api-management/api-management-howto-api-inspector)
-- [백엔드 풀과 서킷 브레이커](https://learn.microsoft.com/en-us/azure/api-management/backends)
-- [토큰 제한의 동시성·카운터·스트리밍 고려사항](https://learn.microsoft.com/en-us/azure/api-management/llm-token-limit-policy)
-- [Application Insights 연결과 API 진단](https://learn.microsoft.com/en-us/azure/api-management/api-management-howto-app-insights)
+1. Text API의 `set-backend-service`를 자동 생성 Text Primary의 실제 ID로 잠시 바꿔 호출합니다.
+2. `text-aoai-02`로 바꾸어 호출합니다.
+3. `text-pool`로 복구합니다.
+4. `image-aoai-01`, `image-aoai-02`도 각각 호출한 뒤 `image-pool`로 복구합니다.
+5. 두 유효 정책이 풀을 참조하는지 확인합니다.
+
+## 5-5. 선택적 제한·전환 테스트
+
+- **텍스트 토큰 제한:** 다른 팀용 Text API 범위 구독을 하나 더 만듭니다. 낮은 테스트 한도와 소수의 요청으로 APIM 429·카운터 분리를 확인합니다. 추정을 끈 상태에서는 응답 후 사용량이 반영됩니다.
+- **이미지 요청 제한:** 요청 한도를 잠시 낮추고 소수의 호출로 잔여 요청 헤더·APIM 429를 확인한 뒤 승인값으로 복구합니다.
+- **전환:** 승인된 격리 환경에서 조직이 제어하는 엔드포인트를 사용합니다. Primary는 429와 `Retry-After: 60`, Secondary는 구분 가능한 성공을 반환하게 합니다. 모델 토큰 정책·자격이 없는 별도 테스트 백엔드·풀·API를 사용하고 전달 전 클라이언트 자격을 제거합니다. 회로 차단 후 후속 요청이 Secondary로 이동하고 복구 시간이 지나면 Primary로 돌아오는지 확인합니다. 운영 모델 쿼터를 소진하지 않습니다.
+- **텍스트 재시도:** 활성화했다면 한 요청의 백엔드 호출이 최대 2회인지 확인합니다. 게이트웨이 제한의 429는 백엔드 재시도 테스트가 아닙니다.
+
+제어 가능한 테스트 엔드포인트가 없으면 전환 미실시로 기록합니다. 설정 화면만으로 실제 전환 성공을 판정하지 않습니다.
+
+## 5-6. 모니터링 설정
+
+1. APIM **Application Insights → Add**에서 승인된 Application Insights 리소스를 연결합니다.
+2. 각 API **Settings → Diagnostics**에서 로거·샘플링을 설정합니다.
+3. 본문·비밀 헤더 수집은 끄고 지연 시간·오류율·429/503 응답을 모니터링합니다.
+
+## 완료 기준
+
+- [ ] 두 API 모두 APIM 구독 키로 호출되고 모델에는 Managed Identity로 인증한다.
+- [ ] 개별 백엔드 네 개와 최종 풀 라우팅이 동작한다.
+- [ ] 선택적 테스트 결과를 기록하고 제한값·풀 경로·재시도를 승인된 설정으로 복구했다.
+
+## 공식 문서
+
+- [포털 요청 추적](https://learn.microsoft.com/en-us/azure/api-management/api-management-howto-api-inspector)
+- [백엔드 풀·서킷 브레이커](https://learn.microsoft.com/en-us/azure/api-management/backends)
+- [토큰 제한 동작](https://learn.microsoft.com/en-us/azure/api-management/llm-token-limit-policy)
+- [Application Insights 연결](https://learn.microsoft.com/en-us/azure/api-management/api-management-howto-app-insights)

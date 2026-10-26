@@ -34,11 +34,11 @@
 3. **APIs → Backends**에서 같은 백엔드를 엽니다.
 4. 실제 ID와 런타임 URL을 기록합니다.
 
-이 백엔드가 **Text Primary**입니다. 문서의 `<generated-text-backend-id>`에는 실제 ID를 사용합니다. 3단계에서는 Text Secondary와 이미지 백엔드 두 개만 추가합니다.
+이 백엔드가 **Text A**입니다. 문서의 `<generated-text-backend-id>`에는 실제 ID를 사용합니다. 3단계에서는 Text B와 이미지 백엔드 두 개만 추가합니다.
 
 | 항목 | 텍스트 설정값 |
 | --- | --- |
-| Primary 백엔드 기본 URL | `https://<text-account-a>.openai.azure.com/openai/deployments/<text-deployment-a>` |
+| Text A 백엔드 기본 URL | `https://<text-account-a>.openai.azure.com/openai/deployments/<text-deployment-a>` |
 | 자동 생성 작업 | `POST /chat/completions` |
 | 클라이언트 경로 | `/text/chat/completions?api-version=<text-version>` |
 
@@ -75,7 +75,7 @@
 ## 완료 기준
 
 - [ ] 텍스트는 Language Model API와 자동 생성 chat completions 작업을 사용한다.
-- [ ] 자동 생성 Text Primary 백엔드 ID를 기록했다.
+- [ ] 자동 생성 Text A 백엔드 ID를 기록했다.
 - [ ] 이미지는 일반 HTTP API와 수동 추가한 이미지 생성 작업을 사용한다.
 - [ ] 두 API 모두 APIM 구독을 요구한다. 테스트 전 3단계로 진행한다.
 

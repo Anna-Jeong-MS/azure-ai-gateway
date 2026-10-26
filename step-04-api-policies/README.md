@@ -23,6 +23,8 @@ English | [Korean](../kr/step-04-api-policies/README.md)
 2. Replace the API policy with the following and select **Save**. Keep the generated operation and request schema.
 3. Select **Calculate effective policy** and confirm the final route is `text-pool`, including at the operation scope.
 
+If generated policies or Backend credentials remain from Language Model API creation, review Backend `api-key` conflicts with MI, duplicate `set-backend-service` at API/Operation/Global scopes, and later deletion or overwrite of the MI-set `Authorization` header.
+
 ```xml
 <policies>
   <inbound>

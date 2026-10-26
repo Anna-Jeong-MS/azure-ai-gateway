@@ -68,20 +68,21 @@ For failures, inspect the Trace stage and error body. Check APIM key/scope for g
 
 Use the baseline policies without the optional retry while testing individual backends.
 
-1. Temporarily change Text API's `set-backend-service` to the actual generated Text Primary ID and test.
+1. Temporarily change Text API's `set-backend-service` to the actual generated Text A ID and test.
 2. Change it to `text-aoai-02` and test.
 3. Restore `text-pool`.
 4. Repeat for `image-aoai-01` and `image-aoai-02`, then restore `image-pool`.
 5. Verify both effective policies reference the pools.
+6. Send a small series of requests to each API and inspect the selected backend in Trace. Confirm that both equal-priority backends receive normal traffic; do not require exact alternation or a precise 50:50 split in a short sample.
 
-## 5-5. Test optional limits and failover
+## 5-5. Test optional limits and circuit recovery
 
 - **Text token limit:** Create a second Text API-scoped subscription for another team. With a low test limit and a few requests, verify APIM's 429 and separate counters. With estimation off, usage is updated after responses.
 - **Image rate limit:** Temporarily lower the request limit, use a small number of calls, and inspect remaining-request headers and APIM 429. Restore the approved value afterward.
-- **Failover:** In an approved isolated test environment, use organization-controlled endpoints: Primary returns 429 with `Retry-After: 60`, Secondary returns an identifiable success. Use separate test backends/pool/API without model-token policies or credentials, and strip client credentials before forwarding. Verify subsequent requests move to Secondary after the circuit trips and return to Primary after recovery. Do not exhaust production model quota.
+- **Circuit recovery:** In an approved isolated test environment, use two organization-controlled endpoints at priority 1 and weight 100. Make one return 429 with `Retry-After: 60` while the other remains healthy. Use separate test backends/pool/API without model-token policies or credentials, and strip client credentials before forwarding. Verify the tripped backend is excluded and rejoins distribution after recovery. Do not exhaust production model quota.
 - **Text retry:** If enabled, confirm no more than two backend attempts for one request. A gateway-limit 429 is not a backend retry test.
 
-Record failover as not performed if controlled test endpoints are unavailable. Do not treat a settings screen as proof of failover.
+Record circuit-recovery testing as not performed if controlled test endpoints are unavailable. Do not treat a settings screen as proof of runtime behavior.
 
 ## 5-6. Configure monitoring
 
@@ -92,7 +93,7 @@ Record failover as not performed if controlled test endpoints are unavailable. D
 ## Completion criteria
 
 - [ ] Both APIs accept their APIM subscription keys and use Managed Identity for model access.
-- [ ] All four individual backends and final pool routes work.
+- [ ] All four individual backends work, and both backends in each pool receive normal traffic.
 - [ ] Record optional test results and restore the approved limits, pool routes, and retry settings.
 
 ## Official documentation

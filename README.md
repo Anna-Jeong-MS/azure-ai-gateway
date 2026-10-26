@@ -13,10 +13,11 @@ Create a new Azure API Management gateway for already-deployed text and image mo
 | Models | Already-deployed `gpt-5.5` and `gpt-image-2.5-flare` |
 | Text API | **Language Model API > Create OpenAI API** |
 | Image API | **HTTP**, with an image-generation operation |
+| Backend distribution | Load balancing: priority **1 / 1**, weight **100 / 100** |
 | Client to APIM | APIM subscription key in `Ocp-Apim-Subscription-Key` |
 | APIM to model | System-assigned Managed Identity through the API inbound policy |
 
-The text API creates one backend automatically. Reuse it as Text Primary and add Text Secondary plus two image backends: **one automatic + three manual = four single backends**.
+The text API creates one backend automatically. Reuse it as Text A and add Text B plus two image backends: **one automatic + three manual = four single backends**.
 
 ## Steps
 
@@ -26,7 +27,7 @@ The text API creates one backend automatically. Reuse it as Text Primary and add
 | [02. Create APIs](step-02-create-apis/README.md) | Create the text Language Model API and image HTTP API immediately after APIM |
 | [03. Configure identity and backends](step-03-backend-pools/README.md) | Enable identity, assign roles, configure backends/circuit breakers, and create pools |
 | [04. Apply policies](step-04-api-policies/README.md) | Create subscriptions and apply authentication, routing, and optional limits/retries |
-| [05. Test the gateway](step-05-validation/README.md) | Test calls, access controls, individual backends, and failover |
+| [05. Test the gateway](step-05-validation/README.md) | Test calls, access controls, individual backends, and load balancing |
 
 ## Request paths
 

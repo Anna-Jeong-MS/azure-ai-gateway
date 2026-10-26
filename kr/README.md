@@ -13,10 +13,11 @@
 | 모델 | 배포 완료된 `gpt-5.5`, `gpt-image-2.5-flare` |
 | 텍스트 API | **Language Model API → Create OpenAI API** |
 | 이미지 API | **HTTP** 일반 API에 이미지 생성 작업 추가 |
+| 백엔드 분산 | 로드 밸런싱: 우선순위 **1 / 1**, 가중치 **100 / 100** |
 | 클라이언트 → APIM | 헤더 `Ocp-Apim-Subscription-Key`의 APIM 구독 키 |
 | APIM → 모델 | API inbound 정책에서 시스템 할당 Managed Identity 사용 |
 
-텍스트 API가 자동 생성한 백엔드를 Text Primary로 사용합니다. Text Secondary와 이미지 백엔드 두 개만 추가하여 **자동 1개 + 수동 3개 = 단일 백엔드 총 4개**를 구성합니다.
+텍스트 API가 자동 생성한 백엔드를 Text A로 사용합니다. Text B와 이미지 백엔드 두 개만 추가하여 **자동 1개 + 수동 3개 = 단일 백엔드 총 4개**를 구성합니다.
 
 ## 진행 순서
 
@@ -26,7 +27,7 @@
 | [02. API 생성](step-02-create-apis/README.md) | APIM 생성 직후 텍스트 Language Model API·이미지 일반 HTTP API 생성 |
 | [03. 관리 ID·백엔드 구성](step-03-backend-pools/README.md) | 관리 ID·역할, 백엔드·서킷 브레이커, 풀 생성 |
 | [04. 정책 적용](step-04-api-policies/README.md) | 구독 생성, 인증·라우팅, 선택적 제한·재시도 적용 |
-| [05. 게이트웨이 테스트](step-05-validation/README.md) | 호출·접근 제어·개별 백엔드·전환 검증 |
+| [05. 게이트웨이 테스트](step-05-validation/README.md) | 호출·접근 제어·개별 백엔드·로드 밸런싱 검증 |
 
 ## 호출 경로
 

@@ -23,6 +23,8 @@
 2. API 정책을 다음으로 교체하고 **Save**를 선택합니다. 자동 생성된 작업과 요청 스키마는 유지합니다.
 3. **Calculate effective policy**에서 작업 범위까지 포함한 최종 경로가 `text-pool`인지 확인합니다.
 
+Language Model API의 자동 생성 정책·Backend 자격이 남아 있으면 Backend의 `api-key`와 MI 충돌, API·Operation·Global 범위의 중복 `set-backend-service`, MI 설정 이후 `Authorization` 삭제·덮어쓰기 여부를 검토합니다.
+
 ```xml
 <policies>
   <inbound>

@@ -34,11 +34,11 @@ The URL entered above is the deployment base: do not append `/chat/completions` 
 3. Open **APIs > Backends** and select that backend.
 4. Record its actual ID and runtime URL.
 
-This is **Text Primary**. Use its actual ID wherever this guide shows `<generated-text-backend-id>`. Step 03 creates only Text Secondary and the two image backends.
+This is **Text A**. Use its actual ID wherever this guide shows `<generated-text-backend-id>`. Step 03 creates only Text B and the two image backends.
 
 | Item | Text value |
 | --- | --- |
-| Primary backend base | `https://<text-account-a>.openai.azure.com/openai/deployments/<text-deployment-a>` |
+| Text A backend base | `https://<text-account-a>.openai.azure.com/openai/deployments/<text-deployment-a>` |
 | Generated operation | `POST /chat/completions` |
 | Client path | `/text/chat/completions?api-version=<text-version>` |
 
@@ -75,7 +75,7 @@ The image backend base ends at `/openai`; the operation supplies the deployment 
 ## Completion criteria
 
 - [ ] Text uses Language Model API and its generated chat-completions operation.
-- [ ] Record the automatically generated Text Primary backend ID.
+- [ ] Record the automatically generated Text A backend ID.
 - [ ] Image uses the regular HTTP API and the manually added image-generation operation.
 - [ ] Both APIs require an APIM subscription. Continue to step 03 before testing.
 

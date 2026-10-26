@@ -24,9 +24,9 @@
 
 텍스트·이미지 배포가 같은 계정을 사용하면 해당 계정의 역할 할당 한 번으로 둘 다 접근합니다. 테스트 전 RBAC 전파 시간을 고려합니다.
 
-## 3-3. Text Primary 재사용·백엔드 3개 추가
+## 3-3. Text A 재사용·백엔드 3개 추가
 
-1. **APIs → Backends**에서 2단계의 자동 생성 Text Primary를 엽니다.
+1. **APIs → Backends**에서 2단계의 자동 생성 Text A를 엽니다.
 2. 실제 ID와 URL을 아래 표와 대조합니다.
 3. 수동 항목 세 개에 대해 각각 **+ Create new backend**를 선택합니다.
 4. 단일 백엔드 유형, HTTP 계열 프로토콜, 아래 HTTPS 런타임 URL을 사용합니다.
@@ -61,27 +61,27 @@
 
 1. **APIs → Backends → Load balancer → + Create new pool**을 선택합니다.
 2. 이름을 `text-pool`로 입력합니다.
-3. 자동 생성 Text Primary의 실제 ID와 `text-aoai-02`를 추가합니다.
+3. 자동 생성 Text A의 실제 ID와 `text-aoai-02`를 추가합니다.
 4. **Customize weight and priority**에서 다음을 입력합니다.
 
 | 풀 | 백엔드 | Priority | Weight |
 | --- | --- | --- | --- |
 | `text-pool` | `<generated-text-backend-id>` | 1 | 100 |
-| `text-pool` | `text-aoai-02` | 2 | 100 |
+| `text-pool` | `text-aoai-02` | 1 | 100 |
 | `image-pool` | `image-aoai-01` | 1 | 100 |
-| `image-pool` | `image-aoai-02` | 2 | 100 |
+| `image-pool` | `image-aoai-02` | 1 | 100 |
 
 5. Session affinity는 끄고 저장합니다.
 6. 이미지 항목을 사용해 `image-pool`도 생성합니다.
 
-평상시 Priority 1이 호출됩니다. 상위 우선순위의 모든 백엔드가 회로 차단으로 사용 불가일 때 Priority 2를 사용하며 실패한 요청이 자동 재시도되지는 않습니다. 평상시 두 계정에 분산하려면 우선순위를 모두 1로 하고 가중치를 같게 설정합니다.
+각 풀의 두 백엔드가 동일한 우선순위·가중치로 평상시 요청을 처리하며 대략 균등하게 분산됩니다. 회로가 차단된 백엔드는 일시 제외되고 복구 후 분산에 다시 참여합니다. 실패한 요청이 자동 재시도되지는 않습니다.
 
 ## 완료 기준
 
 - [ ] APIM 시스템 할당 ID가 활성화되어 있다.
 - [ ] 모든 모델 계정의 리소스 범위에 APIM 관리 ID의 OpenAI User 역할이 있다.
 - [ ] 단일 백엔드 네 개의 HTTPS URL·서킷 브레이커가 설정되어 있다.
-- [ ] `text-pool`, `image-pool`의 구성원·우선순위가 맞다.
+- [ ] 각 풀의 두 백엔드가 모두 우선순위 1·가중치 100이다.
 
 ## 공식 문서
 

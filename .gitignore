@@ -6,6 +6,20 @@
 *.bicepparam
 *.parameters.json
 
+# Existing local deployment code and policies
+/.gitattributes
+/*.bicep
+/apim-*.xml
+/deploy.sh
+/main.json
+/apim-backend-pool.json
+/apim-image-api.json
+/apim-image-backend-pool.json
+
+# Existing local document generators and sources
+/generate-setup-guide*.ps1
+/setup-guide-slides.md
+
 # Local document artifacts
 *.pptx
 *.pdf

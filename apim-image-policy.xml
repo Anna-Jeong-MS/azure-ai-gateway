@@ -1,0 +1,32 @@
+<policies>
+  <inbound>
+    <base />
+    <rate-limit-by-key
+      calls="5"
+      renewal-period="60"
+      counter-key="@(context.Request.Headers.GetValueOrDefault(&quot;x-pipeline-id&quot;, context.Request.IpAddress))"
+      retry-after-header-name="Retry-After"
+      remaining-calls-header-name="x-ratelimit-remaining-requests" />
+    <authentication-managed-identity
+      resource="https://cognitiveservices.azure.com"
+      output-token-variable-name="managed-id-access-token"
+      ignore-error="false" />
+    <set-header name="Authorization" exists-action="override">
+      <value>@("Bearer " + (string)context.Variables["managed-id-access-token"])</value>
+    </set-header>
+    <set-header name="api-key" exists-action="delete" />
+    <set-backend-service backend-id="gpt-image-pool" />
+  </inbound>
+  <backend>
+    <forward-request
+      buffer-request-body="true"
+      fail-on-error-status-code="false"
+      timeout="300" />
+  </backend>
+  <outbound>
+    <base />
+  </outbound>
+  <on-error>
+    <base />
+  </on-error>
+</policies>

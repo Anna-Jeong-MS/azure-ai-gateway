@@ -1,0 +1,19 @@
+# Local credentials and configuration
+.env
+.env.*
+!.env.example
+.azure/
+*.bicepparam
+*.parameters.json
+
+# Local build and document artifacts
+main.json
+apim-backend-pool.json
+apim-image-api.json
+apim-image-backend-pool.json
+*.pptx
+*.pdf
+*.png
+*.PNG
+rendered-setup-guide*/
+screenshots/

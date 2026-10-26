@@ -18,7 +18,7 @@
 #### 텍스트
 
 1. APIM **APIs → APIs → Text API → Test**를 엽니다.
-2. **Create chat completion** 작업을 선택합니다.
+2. 텍스트 Language Model API가 **자동 생성한 POST `/chat/completions` 작업**을 선택합니다. 표시 이름은 다를 수 있습니다.
 3. `api-version`에 1단계에서 성공한 텍스트 버전을 넣습니다.
 4. `Content-Type: application/json`과 Text API에 접근 가능한 APIM 구독 키를 확인합니다.
 5. 4단계의 JSON 본문을 넣습니다.
@@ -86,7 +86,7 @@ API의 **Test**와 응답 **Trace** 탭만 사용합니다. 로컬 클라이언�
 평상시 Primary만 호출되면 Secondary 설정 오류가 숨겨질 수 있습니다.
 
 1. 승인된 비운영 API에서 풀 설정과 정책의 기존 값을 기록합니다.
-2. Text API의 `set-backend-service`를 잠시 `text-aoai-01`로 지정해 텍스트 호출 성공을 확인합니다.
+2. Text API의 `set-backend-service`를 2단계에서 기록한 **자동 생성 Text Primary의 실제 ID**로 잠시 지정해 성공을 확인합니다. `<generated-text-backend-id>`를 그대로 입력하지 않습니다.
 3. `text-aoai-02`로 바꿔 같은 요청의 성공을 확인합니다.
 4. **`text-pool`로 복구**합니다. 선택적 retry 블록에도 같은 라우팅이 있으면 재시도를 잠시 해제하고 검증한 뒤 원래 정책을 복구합니다.
 5. Image API에서도 `image-aoai-01`, `image-aoai-02`를 각각 검증한 뒤 **`image-pool`로 복구**합니다.
@@ -144,9 +144,9 @@ API의 **Test**와 응답 **Trace** 탭만 사용합니다. 로컬 클라이언�
 - [ ] 모델·버전·배포 유형·쿼터 범위를 실제 구독에서 확인했다.
 - [ ] **Standard v2**, 공용 네트워크 접근 활성화, 이번 실습의 VNet Injection·Integration·Private Endpoint 미설정을 확인했다.
 - [ ] 시스템 할당 관리 ID와 계정 네 개의 OpenAI User 역할이 확인된다.
-- [ ] 단일 백엔드 네 개의 관리 ID 인증·회로 차단 규칙이 저장되어 있다.
+- [ ] 자동 생성 Text Primary를 재사용하고 자동 1개 + 수동 3개인 단일 백엔드 네 개에 관리 ID 인증·회로 차단 규칙을 저장했다.
 - [ ] 두 풀의 구성원·우선순위·가중치를 확인했다.
-- [ ] API 두 개와 작업·구독이 준비되었다.
+- [ ] APIM 생성 직후 2단계에서 텍스트 Language Model API·이미지 일반 HTTP API를 만들었고 자동/수동 작업과 범위별 구독을 확인했다.
 - [ ] 모든 개별 백엔드 정상 호출과 풀을 통한 최종 호출을 확인했다.
 - [ ] 선택 정책의 제한·최대 재시도 횟수를 검증했다.
 - [ ] 회로 전환은 실제 검증 결과 또는 미실시 사유를 기록했다.

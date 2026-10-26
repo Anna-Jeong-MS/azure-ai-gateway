@@ -2,7 +2,7 @@
 
 English | [Korean](../kr/step-01-prepare-resources/README.md)
 
-[Contents](../README.md) | [Next: identity and access](../step-02-identity-access/README.md)
+[Contents](../README.md) | [Next: create text and image APIs](../step-02-create-apis/README.md)
 
 ## 1-A. Prerequisites and inputs
 
@@ -226,10 +226,12 @@ VNet injection and outbound VNet integration are different features. Standard v2
 
 3. On **Monitor + secure**, review the need and cost of add-on services.
 4. On **Networking**, use the public endpoint and keep **Public network access enabled**. Leave virtual network configuration at **None / not configured** where shown; do not enable VNet integration or add a private endpoint.
-5. You can enable the system-assigned identity on **Managed identity** now. If so, step 02 only needs to verify it.
+5. You can enable the system-assigned identity on **Managed identity** now. If so, step 03 only needs to verify it.
 6. In **Review + create**, recheck cost, tier, networking, and the existing resource group.
 7. Select **Create** and wait until deployment finishes and the service is Online. Do not assume a fixed provisioning time.
 8. Record the gateway URL, `https://<apim-name>.azure-api.net`.
+
+Next, go directly to **step 02**: create the text Language Model API and image regular HTTP API. Identity/roles and backend pools are completed in step 03 before testing.
 
 ### 1-C-3. Check networking
 

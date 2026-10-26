@@ -2,7 +2,7 @@
 
 [English](../../step-01-prepare-resources/README.md) | 한국어
 
-[전체 목차](../README.md) | [다음: 02. 관리 ID와 접근 권한](../step-02-identity-access/README.md)
+[전체 목차](../README.md) | [다음: 텍스트·이미지 API 생성](../step-02-create-apis/README.md)
 
 ## 1-A. 사전 준비와 입력값 확정
 
@@ -229,10 +229,12 @@ VNet Injection과 아웃바운드 VNet Integration은 다른 기능입니다. St
 
 3. **Monitor + secure**의 추가 서비스는 비용과 필요성을 확인하고 선택합니다.
 4. **Networking**에서 공용 엔드포인트를 사용하고 **Public network access를 활성화**합니다. 가상 네트워크 항목이 표시되면 **None / 미설정**으로 두고, VNet Integration을 켜거나 Private Endpoint를 추가하지 않습니다.
-5. **Managed identity** 탭에서 System assigned를 켤 수 있습니다. 여기서 켰다면 2단계는 확인만 수행합니다.
+5. **Managed identity** 탭에서 System assigned를 켤 수 있습니다. 여기서 켰다면 3단계는 확인만 수행합니다.
 6. **Review + create**에서 요금·SKU·네트워크·기존 리소스 그룹을 다시 확인합니다.
 7. **Create** 후 배포가 끝나고 서비스가 Online이 될 때까지 기다립니다. 고정된 완료 시간을 가정하지 않습니다.
 8. 개요에서 게이트웨이 URL `https://<apim-name>.azure-api.net`을 기록합니다.
+
+바로 **2단계로 이동**하여 텍스트 Language Model API와 이미지 일반 HTTP API를 생성합니다. 관리 ID·역할·백엔드 풀은 테스트 전 3단계에서 완성합니다.
 
 ### 1-C-3. 네트워크 확인
 

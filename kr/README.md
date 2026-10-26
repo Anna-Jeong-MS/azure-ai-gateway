@@ -13,12 +13,14 @@ Azure API Management와 Azure OpenAI를 사용해 텍스트·이미지 모델 �
 | 단계 | 묶어서 진행할 작업 |
 | --- | --- |
 | [01. 기존 모델 확인과 APIM 준비](step-01-prepare-resources/README.md) | 기존 엔드포인트·배포 이름 기록 → 권한·공용 연결 확인 → Standard v2 APIM 생성 |
-| [02. 관리 ID와 접근 권한](step-02-identity-access/README.md) | APIM 시스템 할당 관리 ID → AI 계정별 최소 권한 역할 할당 |
-| [03. 백엔드와 부하 분산 풀](step-03-backend-pools/README.md) | 백엔드 4개 → 관리 ID 인증·서킷 브레이커 → 텍스트·이미지 풀 |
-| [04. API 구성과 정책 적용](step-04-api-policies/README.md) | API·작업·APIM 구독 → 풀 라우팅 → 선택적 제한·재시도 |
+| [02. API 생성](step-02-create-apis/README.md) | APIM 생성 직후 텍스트 Language Model API·이미지 일반 HTTP API 생성 → 자동 텍스트 백엔드 기록 |
+| [03. 관리 ID·백엔드·풀](step-03-backend-pools/README.md) | 관리 ID·계정 역할 → 자동 생성 Text Primary 재사용 → 백엔드 3개 추가·풀 구성 |
+| [04. API 라우팅·정책](step-04-api-policies/README.md) | 기존 API 재사용·구독 생성 → 자동 텍스트 경로를 풀로 교체 → 선택적 제한·재시도 |
 | [05. 검증과 운영 점검](step-05-validation/README.md) | 정상·오류·개별 백엔드·전환 테스트 → 모니터링·최종 체크리스트 |
 
 각 작업의 **완료 기준을 충족한 뒤** 다음으로 이동합니다. 선택 기능은 기본 호출이 성공한 다음 적용합니다.
+
+**API 생성은 APIM 생성 바로 다음인 2단계입니다.** 텍스트는 **Language Model API → Create OpenAI API**, 이미지는 **HTTP 일반 API**로 만듭니다. 텍스트 마법사가 만드는 백엔드 1개를 Primary로 재사용하고 Text Secondary·이미지 2개만 추가하여 **자동 1개 + 수동 3개 = 단일 백엔드 총 4개**로 구성합니다.
 
 ## 전체 구성
 
@@ -26,7 +28,7 @@ Azure API Management와 Azure OpenAI를 사용해 텍스트·이미지 모델 �
 클라이언트 -- 공용 HTTPS + APIM 구독 키 --> APIM Standard v2 (시스템 할당 관리 ID)
                                |
                                +-- /text  --> text-pool
-                               |              +-- text-aoai-01 (리전 A)
+                               |              +-- 자동 생성 Text Primary (리전 A)
                                |              +-- text-aoai-02 (리전 B)
                                |
                                +-- /image --> image-pool
@@ -43,10 +45,10 @@ APIM -- 공용 HTTPS + Entra 토큰 --> 각 Azure OpenAI 계정
 | 원본 내용 | 가이드 위치 |
 | --- | --- |
 | PDF p.16: 보안·복원력·확장성·관측 개요 | 02~05 |
-| PDF p.20~21: 팀별 2,000 TPM, 구독 ID 기준 분리, 키 없는 인증 | 02, 04의 선택적 토큰 제한, 05 |
+| PDF p.20~21: 팀별 2,000 TPM, 구독 ID 기준 분리, 키 없는 인증 | 03, 04의 선택적 토큰 제한, 05 |
 | PDF p.22: PTU/PAYG 백엔드 풀·서킷 브레이커 | 03, 05의 전환 검증 |
-| 요구사항의 Standard v2·기존 모델 정보·작업자 권한 | 01~02 |
-| 요구사항의 백엔드·풀·API·정책·점검 목록 | 03~05 |
+| 요구사항의 Standard v2·기존 모델 정보·작업자 권한 | 01, 03 |
+| 요구사항의 API·백엔드·풀·정책·점검 목록 | 02~05 |
 | PDF p.8·23·29의 의미 기반 캐시, p.9·24의 Content Safety | 이번 필수 구성 밖의 후속 확장 |
 | PDF의 MCP·A2A·API Center·Foundry Preview 소개 | 이번 요구사항의 실습 범위에 포함하지 않음 |
 
@@ -63,7 +65,7 @@ PDF는 기능 소개 자료이므로 무료 호출량·가격·GA/Preview·지�
 ## 사용 전 확인
 
 - 텍스트 `gpt-5.5`와 이미지 `gpt-image-2.5-flare`는 **이미 배포된 상태**입니다. 실제 엔드포인트·배포 이름·버전·유형만 확인하며 AI 계정 생성이나 모델 배포·이름 변경·증설은 수행하지 않습니다.
-- 기본 호출은 Azure OpenAI 계정의 `*.openai.azure.com` 주소와 **배포 경로 + 날짜형 `api-version`** 방식입니다. Foundry 프로젝트 API나 OpenAI v1 경로를 섞지 않습니다. 텍스트 v1 대안은 04단계에 구분했습니다.
+- 기본 호출은 Azure OpenAI와 날짜형 `api-version`을 사용합니다. 텍스트는 배포 경로가 포함된 백엔드 기본 URL에 자동 생성 `/chat/completions` 작업을 연결하고, 이미지는 `/openai` 기본 URL에 배포 경로가 있는 수동 작업을 연결합니다. 두 구성이나 v1 경로를 섞지 않으며 텍스트 v1 대안은 04단계에 구분했습니다.
 - `<...>`는 사용자가 채울 값입니다. 실제 고객 환경 값과 비밀은 로컬 기록에만 보관합니다.
 - 리소스 설정과 테스트는 정책 편집기·API 테스트 콘솔을 포함해 **Azure Portal에서만** 진행합니다. CLI·PowerShell·Cloud Shell 실행 단계는 없습니다.
 - 공용 연결이 익명 접근을 의미하지는 않습니다. APIM 구독 검증과 모델 계정의 관리 ID·RBAC 인증은 유지합니다.

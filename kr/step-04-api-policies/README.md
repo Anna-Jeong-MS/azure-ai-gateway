@@ -1,48 +1,28 @@
-# 04. API 구성과 정책 적용
+# 04. API 라우팅·구독·정책 적용
 
 [English](../../step-04-api-policies/README.md) | 한국어
 
-[이전: 03. 백엔드와 부하 분산 풀](../step-03-backend-pools/README.md) | [전체 목차](../README.md) | [다음: 05. 검증과 운영 점검](../step-05-validation/README.md)
+[이전: 관리 ID·백엔드·풀](../step-03-backend-pools/README.md) | [전체 목차](../README.md) | [다음: 05. 검증과 운영 점검](../step-05-validation/README.md)
 
 ## 4-A. 텍스트·이미지 API와 APIM 구독 구성
 
 
 ### 목표와 시작 조건
 
-풀마다 별도 HTTP API를 만들고 작업을 명시적으로 노출합니다. API 분리는 기술적 필수 사항이 아니라 이번 실습의 정책·운영 경계입니다.
+두 API는 APIM 생성 직후인 2단계에서 이미 만들었습니다. **텍스트는 Language Model API**, **이미지는 일반 HTTP API**를 재사용하며 API나 Text Primary 백엔드를 중복 생성하지 않습니다.
 
 1단계에서 확인한 기존 배포 정보와 3단계의 풀·백엔드 저장 상태를 확인합니다. 직접 Playground 호출은 선택 사항이며 실제 APIM 호출은 5단계에서 검증합니다.
 
 `gpt-55`, `gpt-image-25-flare`는 기존 배포 이름의 예시입니다. 이후 작업 경로와 테스트의 이름을 1단계에서 기록한 실제 이름으로 바꾸며 예시에 맞추려고 모델을 생성하거나 이름을 변경하지 않습니다.
 
-### 4-A-1. 텍스트 HTTP API 생성
+### 4-A-1. 기존 텍스트 Language Model API 확인
 
-1. APIM **APIs → APIs → + Add API → HTTP**를 선택합니다.
-2. 다음을 입력합니다.
-
-| 필드 | 입력 |
-| --- | --- |
-| Display name | `Text API` |
-| Name | `text-api` |
-| Web service URL | `https://<text-account-a>.openai.azure.com/openai` |
-| API URL suffix | `text` |
-| URL scheme | HTTPS |
-| Subscription required | On |
-
-3. 생성 후 **Settings**에서 Subscription required가 켜져 있는지 확인합니다. 기본 Backend URL은 임시 기본값이며 4단계 정책에서 풀로 대체합니다.
-4. **Design → + Add operation**을 선택합니다.
-5. 다음 작업을 생성합니다.
-
-| 필드 | 입력 |
-| --- | --- |
-| Display name | `Create chat completion` |
-| Name | `create-chat-completion` |
-| Method | `POST` |
-| URL | `/deployments/gpt-55/chat/completions` |
-| Query parameter | `api-version`, 1단계에서 확인한 텍스트 버전 |
-| Request content type | `application/json` |
-
-6. Query parameter의 예시/기본값을 실제 지원 버전으로 입력합니다. 클라이언트도 `api-version`을 보내도록 안내합니다.
+1. **2단계 2-A에서 가져온 APIs → APIs → Text API**를 엽니다. 없으면 2단계를 먼저 완료하며 여기서 텍스트 HTTP API를 만들지 않습니다.
+2. **Settings**에서 suffix `text`, HTTPS, **Subscription required = On**을 확인합니다.
+3. **Design**에서 자동 생성된 **POST `/chat/completions`** 작업을 선택합니다. 표시 이름은 다를 수 있습니다.
+4. 두 텍스트 백엔드의 기본 URL에 `/openai/deployments/<실제 텍스트 배포 이름>`이 포함되는지 확인합니다. 작업 경로에 `/deployments/...`를 다시 넣지 않습니다.
+5. Query parameters에 1단계에서 확인한 날짜형 `api-version`을, 요청 content type에 `application/json`을 추가하거나 확인합니다.
+6. 정책 편집기에서 `<generated-text-backend-id>`를 참조하는 자동 생성 `set-backend-service`를 찾습니다. 4-B에서 **단일 백엔드 경로를 `text-pool`로 교체**하고 풀을 덮어쓰는 작업별 경로도 수정 또는 제거합니다.
 7. 최소 요청 예시는 다음과 같습니다. 기존 배포의 포털 샘플에서 지원하는 것으로 확인한 필드만 사용합니다.
 
 ```json
@@ -58,11 +38,11 @@
 }
 ```
 
-이 실습은 배포 이름이 들어간 **고정 작업 경로**를 사용합니다. 임의의 배포를 노출하는 와일드카드 작업은 만들지 않습니다.
+텍스트 배포 이름은 **백엔드 기본 URL**에 있고 생성된 클라이언트 작업 경로에는 없습니다. 생성된 작업·스키마를 유지하며 수동 텍스트 작업이나 passthrough 와일드카드를 추가하지 않습니다.
 
-### 4-A-2. 이미지 HTTP API 생성
+### 4-A-2. 기존 이미지 일반 HTTP API 확인
 
-같은 방식으로 API와 작업을 생성합니다.
+**2단계 2-B에서 HTTP 타일로 만든 Image API**를 엽니다. 아래 저장값을 확인하며 이미지에 Language Model API를 사용하거나 API를 중복 생성하지 않습니다.
 
 | 필드 | 입력 |
 | --- | --- |
@@ -76,7 +56,7 @@
 | Query parameter | `api-version`, 1단계에서 확인한 이미지 버전 |
 | Request content type | `application/json` |
 
-최소 요청 예시입니다. 실제 모델의 지원 옵션을 직접 호출 결과와 대조합니다.
+최소 요청 예시입니다. 실제 모델의 포털 샘플에서 지원하는 옵션과 대조합니다.
 
 ```json
 {
@@ -88,11 +68,11 @@
 
 ### 4-A-3. 경로 조합 확인
 
-APIM은 API suffix를 클라이언트 경로에 사용하고, 선택된 백엔드 base URL에 작업 경로를 연결합니다. 최종 URL을 기존 배포의 포털 샘플과 대조합니다.
+텍스트와 이미지는 의도적으로 다른 경로 구성을 사용합니다. APIM은 선택된 백엔드 기본 URL에 작업 경로를 연결합니다. 최종 URL을 기존 배포의 포털 샘플과 대조합니다.
 
 | 구간 | 텍스트 예 |
 | --- | --- |
-| 클라이언트 → APIM | `https://<apim>.azure-api.net/text/deployments/gpt-55/chat/completions?api-version=<text-version>` |
+| 클라이언트 → APIM | `https://<apim>.azure-api.net/text/chat/completions?api-version=<text-version>` |
 | APIM → Text A | `https://<text-account-a>.openai.azure.com/openai/deployments/gpt-55/chat/completions?api-version=<text-version>` |
 | APIM → Text B | 위와 같은 경로·쿼리, 호스트만 Text B |
 
@@ -102,7 +82,7 @@ APIM은 API suffix를 클라이언트 경로에 사용하고, 선택된 백엔�
 https://<apim>.azure-api.net/image/deployments/gpt-image-25-flare/images/generations?api-version=<image-version>
 ```
 
-별도의 `rewrite-uri`는 필요하지 않습니다. 상위 정책에 URL 재작성이나 `api-version` 변경이 있다면 **Calculate effective policy**와 Trace로 최종 경로를 확인합니다.
+텍스트는 `/openai/deployments/gpt-55`에 `/chat/completions`를, 이미지는 `/openai`에 `/deployments/gpt-image-25-flare/images/generations`를 연결합니다. 이 기준 구성에는 별도의 `rewrite-uri`가 필요하지 않습니다. 자동 생성·상위 정책의 URL/API 버전 변경 여부는 **Calculate effective policy**와 Trace로 확인합니다.
 
 ### 4-A-4. API별 테스트 구독 생성
 
@@ -123,18 +103,18 @@ https://<apim>.azure-api.net/image/deployments/gpt-image-25-flare/images/generat
 
 | 항목 | 기본: 배포 경로 API | v1 텍스트 대안 |
 | --- | --- | --- |
-| 두 텍스트 백엔드 Runtime URL | `https://<account>.openai.azure.com/openai` | `https://<account>.openai.azure.com/openai/v1` |
+| 두 텍스트 백엔드 Runtime URL | `https://<account>.openai.azure.com/openai/deployments/gpt-55` | `https://<account>.openai.azure.com/openai/v1` |
 | Text API Web service URL | 위 Primary URL | 위 v1 Primary URL |
-| Operation URL | `/deployments/gpt-55/chat/completions` | `/chat/completions` |
+| Operation URL | `/chat/completions` | `/chat/completions` |
 | 배포 선택 | URL의 `gpt-55` | JSON 본문의 `"model": "gpt-55"` |
 | Query | 날짜형 `api-version` 필수 | v1 GA에서 날짜형 버전 불필요 |
-| APIM 호출 경로 | `/text/deployments/gpt-55/chat/completions` | `/text/chat/completions` |
+| APIM 호출 경로 | `/text/chat/completions` | `/text/chat/completions` |
 
 풀 이름과 관리 ID 방식은 유지합니다. 이 전환 표를 이미지 API 지원의 근거로 사용하지 않습니다. 이미지도 v1로 바꾸려면 해당 이미지 모델의 공식 API·요청 스키마를 별도 확인해야 합니다.
 
 ### 완료 기준
 
-- [ ] API 두 개가 있고 각각 POST 작업이 하나씩 저장되었다.
+- [ ] 2단계의 텍스트 Language Model API·자동 생성 작업과 이미지 일반 HTTP API·명시적 작업을 재사용한다.
 - [ ] 백엔드 URL + 작업 경로가 기존 배포에서 지원하는 URL과 일치한다.
 - [ ] API별 Active 상태의 구독이 있다.
 - [ ] 텍스트·이미지의 API 버전과 키를 혼동하지 않았다.
@@ -148,6 +128,7 @@ https://<apim>.azure-api.net/image/deployments/gpt-image-25-flare/images/generat
 - [이미지 생성 API 예시](https://learn.microsoft.com/en-us/azure/foundry/openai/how-to/dall-e)
 - [Azure OpenAI v1과 날짜형 API의 차이](https://learn.microsoft.com/en-us/azure/foundry/openai/api-version-lifecycle)
 - [v1 Chat API와 인증](https://learn.microsoft.com/en-us/rest/api/microsoft-foundry/azureopenai/chat?view=rest-microsoft-foundry-v1)
+- [Language Model API 가져오기와 자동 백엔드](https://learn.microsoft.com/en-us/azure/api-management/openai-compatible-llm-api)
 
 ---
 
@@ -164,10 +145,12 @@ API를 올바른 풀로 보내고, 기본 호출 성공 후 선택 기능을 단
 
 1. APIM **APIs → APIs → Text API → Design → All operations**를 선택합니다.
 2. 정책 코드 편집기 **`</>`**를 엽니다.
-3. 기존 정책은 승인된 로컬 기록에 보관하고, 상위/global/product/operation 정책과 충돌하는 인증·라우팅·재시도가 없는지 확인합니다.
+3. 기존 정책은 승인된 로컬 기록에 보관하고 텍스트 마법사의 자동 생성 정책 및 global/product/operation 범위에서 중복 제한·인증 충돌·단일 백엔드 경로·재시도를 확인합니다.
 4. 아래 Text API 기본 정책을 적용하고 **Save**를 선택합니다.
 5. **Calculate effective policy**로 유효 정책을 확인합니다. 라우팅이나 인증을 덮어쓰는 작업별 정책이 있으면 영향도를 확인한 뒤 정리합니다.
 6. Image API에도 별도의 기본 정책을 적용합니다.
+
+아래 기본 정책은 3단계에서 자동 생성 백엔드까지 포함한 두 텍스트 단일 백엔드에 관리 ID 자격을 설정한 상태를 전제로 합니다. 마법사가 API 수준 인증 정책도 만들었다면 인증 위치를 이 기준에 맞춰 정리하며 토큰을 중복 발급하거나 백엔드 자격 준비 없이 정책 발급 토큰을 삭제하지 않습니다. 가져온 작업 정의와 요청 스키마는 유지하고 API 자체가 아닌 자동 생성 단일 백엔드 경로를 교체합니다.
 
 `<base />`는 상위 정책 상속을 의미합니다. 아래 예시의 `<backend>`에는 직접 `forward-request`를 정의하므로 `<base />`를 함께 추가하지 않습니다. 전역 backend 정책에 필수 처리가 있다면 이를 생략하는 영향도를 검토하고 보존해야 합니다.
 
@@ -257,7 +240,7 @@ PDF의 팀별 제한 예시와 맞춰 실습 시작값을 **구독당 2,000 TPM*
 ```
 
 - `context.Subscription.Id`를 기준으로 나누므로 **팀별 별도 구독**이 필요합니다. 임의로 변경 가능한 `x-pipeline-id` 헤더를 신뢰 경계로 사용하지 않습니다.
-- 수동 HTTP API에 요청 스키마를 넣지 않았으므로 초기 실습은 `estimate-prompt-tokens="false"`로 실제 응답의 `usage`를 사용합니다. PDF 예시의 `true`를 사용하려면 지원되는 요청 스키마를 정의/가져오고 추정 결과를 검증합니다.
+- 초기 실습은 `estimate-prompt-tokens="false"`로 실제 응답의 `usage`를 사용합니다. `true`를 사용하려면 Language Model API가 가져온 요청 스키마와 토큰 추정 지원을 확인하고 검증합니다. 텍스트를 스키마 없는 수동 HTTP API로 만들었다고 가정하지 않습니다.
 - `false`에서는 응답 후 사용량이 반영되며 이미 진행 중인 호출이 한도를 초과할 수 있습니다. 정확한 사전 차단이나 비용 상한 보장으로 해석하지 않습니다.
 - 스트리밍은 토큰 추정 특성이 다릅니다. 먼저 비스트리밍으로 검증합니다.
 - 같은 counter-key는 여러 정책 범위에서 카운터를 공유할 수 있습니다. `text:` 접두사로 용도를 구분하고 여러 범위에 중복 제한을 넣지 않습니다.

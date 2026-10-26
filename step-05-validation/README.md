@@ -17,7 +17,7 @@ Complete sections 5-A-1 through 5-A-3 with baseline policies first. If adding op
 #### Text
 
 1. Open **APIs > APIs > Text API > Test**.
-2. Select **Create chat completion**.
+2. Select the **generated POST `/chat/completions` operation** from the text Language Model API. Its display name can vary.
 3. Set `api-version` to the text version verified in step 01.
 4. Confirm `Content-Type: application/json` and a subscription key that can access Text API.
 5. Enter step 04's JSON request.
@@ -85,7 +85,7 @@ A model-quota 429, an APIM token-limit 429, and a circuit-related 503 are differ
 Normal primary-only traffic can hide secondary configuration failures.
 
 1. In an approved non-production API, record existing pool and policy settings.
-2. Temporarily point Text API's `set-backend-service` at `text-aoai-01` and verify success.
+2. Temporarily point Text API's `set-backend-service` at the **actual generated Text Primary backend ID** recorded in step 02 (`<generated-text-backend-id>` is only a placeholder) and verify success.
 3. Point it at `text-aoai-02` and verify the same request.
 4. **Restore `text-pool`.** If the optional retry block also selects a backend, temporarily disable retries for the individual tests and restore the original policy afterward.
 5. Repeat for `image-aoai-01` and `image-aoai-02`, then **restore `image-pool`**.
@@ -143,9 +143,9 @@ If controlled endpoints are unavailable, record **failover test not performed**.
 - [ ] Verify models, versions, deployment types, and actual quota scope in the target subscription.
 - [ ] Confirm **Standard v2**, public network access enabled, and no VNet injection/integration or private endpoints configured for this walkthrough.
 - [ ] Verify the system-assigned identity and OpenAI User role on every account.
-- [ ] Save authentication and circuit-breaker settings on all four single backends.
+- [ ] Reuse the generated Text Primary backend and save authentication/circuit-breaker settings on all four single backends: one automatic plus three manual.
 - [ ] Confirm both pools' members, priorities, and weights.
-- [ ] Create both APIs, their explicit operations, and scoped subscriptions.
+- [ ] Create APIs immediately after APIM in step 02: text through Language Model API, images through the regular HTTP tile; verify generated/manual operations and scoped subscriptions.
 - [ ] Successfully call every backend individually and through the final pools.
 - [ ] Verify optional limits and maximum retry attempts.
 - [ ] Record actual failover results or why the test was not performed.

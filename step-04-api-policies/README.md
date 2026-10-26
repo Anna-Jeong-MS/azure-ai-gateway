@@ -1,47 +1,27 @@
-# 04. APIs and policies
+# 04. API routing, subscriptions, and policies
 
 English | [Korean](../kr/step-04-api-policies/README.md)
 
-[Previous: backends and pools](../step-03-backend-pools/README.md) | [Contents](../README.md) | [Next: validation and operations](../step-05-validation/README.md)
+[Previous: identity, backends, and pools](../step-03-backend-pools/README.md) | [Contents](../README.md) | [Next: validation and operations](../step-05-validation/README.md)
 
 ## 4-A. Configure APIs and subscriptions
 
 ### Objective and prerequisites
 
-Create a separate HTTP API for each pool and explicitly expose operations. Separate APIs are an operational and policy boundary for this exercise, not a technical requirement.
+Both APIs were created immediately after APIM in step 02: **text with Language Model API**, **images with the regular HTTP tile**. Reuse them here; do not create duplicate APIs or a second Text Primary backend.
 
 First verify the existing deployment details from step 01 and saved pools/backends from step 03. A direct Playground call is optional; actual APIM calls are validated in step 05.
 
 `gpt-55` and `gpt-image-25-flare` are example existing deployment names. Substitute the actual names recorded in step 01 throughout operation paths and tests; do not create or rename deployments to match the examples.
 
-### 4-A-1. Create the text HTTP API
+### 4-A-1. Verify the existing text Language Model API
 
-1. Open **APIs > APIs > + Add API > HTTP**.
-2. Enter:
-
-| Field | Value |
-| --- | --- |
-| Display name | `Text API` |
-| Name | `text-api` |
-| Web service URL | `https://<text-account-a>.openai.azure.com/openai` |
-| API URL suffix | `text` |
-| URL scheme | HTTPS |
-| Subscription required | On |
-
-3. After creation, confirm **Subscription required** under **Settings**. The backend URL is an initial default; section 4-B overrides it with a pool.
-4. Select **Design > + Add operation**.
-5. Configure:
-
-| Field | Value |
-| --- | --- |
-| Display name | `Create chat completion` |
-| Name | `create-chat-completion` |
-| Method | `POST` |
-| URL | `/deployments/gpt-55/chat/completions` |
-| Query parameter | `api-version`, using the text version verified in step 01 |
-| Request content type | `application/json` |
-
-6. Set the query parameter's example/default to the supported version. Clients should also send `api-version`.
+1. Open **APIs > APIs > Text API**, imported in **step 02, section 2-A**. If missing, return to that step; do not create a text HTTP API here.
+2. Under **Settings**, confirm suffix `text`, HTTPS, and **Subscription required = On**.
+3. In **Design**, select the generated **POST `/chat/completions`** operation; its display name can vary.
+4. Confirm that both text backend bases include `/openai/deployments/<actual-text-deployment>`. Do not add another `/deployments/...` to the operation path.
+5. Add/confirm the date-based `api-version` from step 01 in the query parameters and request content type `application/json`.
+6. In the policy editor, locate the generated `set-backend-service` referencing `<generated-text-backend-id>`. In section 4-B, replace that **single-backend route with `text-pool`** and remove/update any operation-level route that would override it.
 7. Use this minimal request, retaining only fields supported by the existing deployment's portal sample:
 
 ```json
@@ -57,11 +37,11 @@ First verify the existing deployment details from step 01 and saved pools/backen
 }
 ```
 
-This exercise uses a **fixed operation path containing the deployment name**. Do not create wildcard operations exposing arbitrary deployments.
+For text, the deployment name belongs to the **backend base URL**, not the generated client operation path. Preserve the generated operation/schema rather than adding another manual text operation or passthrough wildcard.
 
-### 4-A-2. Create the image HTTP API
+### 4-A-2. Verify the existing image HTTP API
 
-Repeat API and operation creation with:
+Open the **Image API created with the HTTP tile in step 02, section 2-B**. Verify the saved settings below; do not use Language Model API for images and do not create another image API here.
 
 | Field | Value |
 | --- | --- |
@@ -87,11 +67,11 @@ Check this minimal request against the actual model's supported options:
 
 ### 4-A-3. Check URL composition
 
-APIM uses the API suffix on the client-facing URL and appends the operation path to the selected backend base URL. Compare the resulting URL with the existing deployment's portal sample.
+Text and images deliberately use different layouts. APIM appends each operation path to the selected backend base URL. Compare the final URL with the existing deployment's portal sample.
 
 | Connection | Text example |
 | --- | --- |
-| Client to APIM | `https://<apim>.azure-api.net/text/deployments/gpt-55/chat/completions?api-version=<text-version>` |
+| Client to APIM | `https://<apim>.azure-api.net/text/chat/completions?api-version=<text-version>` |
 | APIM to Text A | `https://<text-account-a>.openai.azure.com/openai/deployments/gpt-55/chat/completions?api-version=<text-version>` |
 | APIM to Text B | Same path and query, with the Text B hostname |
 
@@ -101,7 +81,7 @@ Image client URL:
 https://<apim>.azure-api.net/image/deployments/gpt-image-25-flare/images/generations?api-version=<image-version>
 ```
 
-No extra `rewrite-uri` is needed. If inherited policies rewrite URLs or API versions, inspect **Calculate effective policy** and Trace to confirm the final path.
+For text, join `/openai/deployments/gpt-55` with `/chat/completions`. For images, join `/openai` with `/deployments/gpt-image-25-flare/images/generations`. No extra `rewrite-uri` is needed for this reference layout. Inspect generated/inherited policies and Trace for URL or API-version overrides.
 
 ### 4-A-4. Create API-scoped test subscriptions
 
@@ -122,18 +102,18 @@ The default walkthrough uses date-based APIs. If selecting v1, change every text
 
 | Setting | Default deployment-path API | Text v1 alternative |
 | --- | --- | --- |
-| Runtime URLs on both text backends | `https://<account>.openai.azure.com/openai` | `https://<account>.openai.azure.com/openai/v1` |
+| Runtime URLs on both text backends | `https://<account>.openai.azure.com/openai/deployments/gpt-55` | `https://<account>.openai.azure.com/openai/v1` |
 | Text API Web service URL | Primary URL above | Primary v1 URL above |
-| Operation URL | `/deployments/gpt-55/chat/completions` | `/chat/completions` |
+| Operation URL | `/chat/completions` | `/chat/completions` |
 | Deployment selection | `gpt-55` in the path | `"model": "gpt-55"` in the JSON body |
 | Query | Date-based `api-version` required | Date-based version not required for v1 GA |
-| APIM path | `/text/deployments/gpt-55/chat/completions` | `/text/chat/completions` |
+| APIM path | `/text/chat/completions` | `/text/chat/completions` |
 
 Keep the pool name and managed identity approach. This table does not establish image v1 support. Independently check the image model's official API and request schema before converting it.
 
 ### Completion criteria
 
-- [ ] Save both APIs, each with its explicit POST operation.
+- [ ] Reuse the text Language Model API/generated operation and the image regular HTTP API/explicit operation created in step 02.
 - [ ] Confirm backend base URL plus operation path matches the existing deployment's supported URL.
 - [ ] Create an Active subscription scoped to each API.
 - [ ] Keep text/image API versions and subscription keys separate.
@@ -147,6 +127,7 @@ Calling now can still use the default primary URL. **Pool routing is complete on
 - [Image-generation API examples](https://learn.microsoft.com/en-us/azure/foundry/openai/how-to/dall-e)
 - [v1 versus date-based APIs](https://learn.microsoft.com/en-us/azure/foundry/openai/api-version-lifecycle)
 - [v1 Chat API and authentication](https://learn.microsoft.com/en-us/rest/api/microsoft-foundry/azureopenai/chat?view=rest-microsoft-foundry-v1)
+- [Language Model API import and generated backend](https://learn.microsoft.com/en-us/azure/api-management/openai-compatible-llm-api)
 
 ---
 
@@ -162,10 +143,12 @@ Route each API to its pool, then add optional features incrementally after basic
 
 1. Select **APIs > APIs > Text API > Design > All operations**.
 2. Open the **`</>`** policy code editor.
-3. Keep an approved local copy of existing policies. Check global, product, API, and operation scopes for conflicting authentication, routing, or retries.
+3. Keep an approved local copy of existing policies. Check the text wizard's generated policies and global/product/operation scopes for duplicate limits, conflicting authentication, single-backend routes, or retries.
 4. Apply the text baseline below and select **Save**.
 5. Inspect **Calculate effective policy**. Assess and resolve any operation-level routing or authentication overrides.
 6. Apply the separate image baseline to Image API.
+
+The baseline below uses managed identity credentials on both text single backends, including the generated one, as completed in step 03. If the wizard also emitted API-level authentication, reconcile it with this choice rather than issuing tokens twice or deleting a policy-issued token without backend credentials ready. Preserve imported operation definitions and request schemas; replace the generated single-backend route, not the API itself.
 
 `<base />` inherits parent policies. These examples define `forward-request` directly in `<backend>`, so do not add `<base />` alongside it. If global backend policies contain mandatory processing, assess the effect of overriding them and preserve required behavior.
 
@@ -255,7 +238,7 @@ Use **2,000 TPM per APIM subscription** as the exercise starting point, matching
 ```
 
 - **Each team needs its own APIM subscription.** Do not use an arbitrary caller-controlled `x-pipeline-id` header as a trusted team boundary.
-- The manually created HTTP API has no supplied request schema, so start with `estimate-prompt-tokens="false"` and actual response `usage`. To use the PDF's `true` setting, define/import a supported request schema and verify estimation.
+- Start with `estimate-prompt-tokens="false"` and actual response `usage` for the baseline. To use `true`, inspect the Language Model API's imported request schema and verify supported prompt-token estimation; do not assume the text API was manually created without a schema.
 - With `false`, consumption is updated after responses. In-flight calls can exceed the limit; this is not an exact pre-request spending cap.
 - Streaming has different estimation behavior. Start with non-streaming requests.
 - The same counter key can share a counter across policy scopes. The `text:` prefix separates its purpose; avoid duplicate limits across scopes.
